@@ -1,0 +1,42 @@
+# Dependencies and builds
+node_modules
+dist
+dist-ssr
+*.local
+
+# Env and secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editors
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Android / Capacitor (later)
+android/.gradle
+android/app/build
+android/local.properties
+android/captures
+*.apk
+*.aab
+*.ap_
+*.dex
+*.keystore
+!debug.keystore
