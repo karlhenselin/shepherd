@@ -76,33 +76,31 @@ export class WatercolorWorld {
     }
 
     beginCreation (): void {
-        if (this.creationRemaining > 0 || this.blobs.length > 0) {
+        if (this.creationStarted) {
             return;
         }
+
+        this.creationStarted = true;
 
         const start = startCenter();
         const originX = start.x - REGION_WIDTH / 2;
         const originY = start.y - REGION_HEIGHT / 2;
-        const jobs: DropSpec[] = [];
 
-        for (const wash of [...HEAVENS, ...EARTH]) {
-            jobs.push({
+        for (const [index, wash] of [...HEAVENS, ...EARTH].entries()) {
+            this.creationQueue.push({
                 x: originX + wash.x * REGION_WIDTH,
                 y: originY + wash.y * REGION_HEIGHT,
                 rx: wash.rx * REGION_WIDTH,
                 ry: wash.ry * REGION_HEIGHT,
                 color: wash.color,
                 alpha: wash.y < 0.5 ? 0.13 : 0.11,
-                seed: seedFor(jobs.length + 1)
+                seed: seedFor(index + 1)
             });
         }
-
-        this.creationRemaining = jobs.length;
-        this.pending.push(...jobs);
     }
 
     creationSpawned (): boolean {
-        return this.creationRemaining === 0 && this.pending.every((drop) => drop.seed > 20);
+        return this.creationStarted && this.creationQueue.length === 0;
     }
 
     attachToWorld (scene: Scene): void {
@@ -150,7 +148,7 @@ export class WatercolorWorld {
 
         this.nextStepAt = time + STEP_MS;
 
-        const drops = this.creationRemaining > 0 ? 1 : 2;
+        const drops = this.creationQueue.length > 0 ? 1 : 2;
 
         for (let i = 0; i < drops; i++) {
             this.spawnNext(scene);
@@ -164,14 +162,10 @@ export class WatercolorWorld {
     }
 
     private spawnNext (scene: Scene): void {
-        const spec = this.pending.shift();
+        const spec = this.creationQueue.shift() ?? this.pending.shift();
 
         if (!spec) {
             return;
-        }
-
-        if (this.creationRemaining > 0) {
-            this.creationRemaining -= 1;
         }
 
         const blob = this.createBlob(scene, spec);
