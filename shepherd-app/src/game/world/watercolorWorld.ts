@@ -212,9 +212,9 @@ export class WatercolorWorld {
 
     private placeBlob (scene: Scene, blob: PaintBlob): GameObjects.Image {
         if (blob.image?.active && blob.image.scene === scene) {
-        blob.image.setPosition(blob.x, blob.y);
-        blob.image.setDisplaySize(blob.width, blob.height);
-        return blob.image;
+            blob.image.setPosition(blob.x, blob.y);
+            blob.image.setDisplaySize(blob.width, blob.height);
+            return blob.image;
         }
 
         blob.image = scene.add.image(blob.x, blob.y, blob.key).setDepth(BLOB_DEPTH);
@@ -229,18 +229,23 @@ export class WatercolorWorld {
             return;
         }
 
+        image.setDisplaySize(blob.width, blob.height);
+
         const rng = mulberry32(seed ^ 0x51ed);
         const fromY = blob.y - (FALL_PX + rng() * 90);
+        const landScaleX = image.scaleX;
+        const landScaleY = image.scaleY;
 
         image.setPosition(blob.x, fromY);
         image.setAlpha(0.15);
-        image.setScale(0.72);
+        image.setScale(landScaleX * 0.72, landScaleY * 0.72);
 
         scene.tweens.add({
             targets: image,
             y: blob.y,
             alpha: 1,
-            scale: 1,
+            scaleX: landScaleX,
+            scaleY: landScaleY,
             duration: 520 + rng() * 280,
             ease: 'Cubic.easeIn'
         });
