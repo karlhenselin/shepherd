@@ -22,6 +22,7 @@ export class Preloader extends Scene
         this.load.image('sheepfold', 'sheepfold.png');
         this.load.image('water-source', 'water.png');
         this.load.audio('exhale', 'audio/exhale.mp3');
+        this.load.audio('wanderlust', 'music/wanderlust-justin-lee-main-version-29117-01-40.mp3');
     }
 
     create ()

@@ -29,6 +29,18 @@ export class Sheepfold {
     isNear (x: number, y: number): boolean {
         return Math.hypot(this.x - x, this.y - y) < ENTER_RANGE;
     }
+
+    restSpot (slot: number): { x: number; y: number } {
+        const angle = (slot / 3) * Math.PI * 2;
+        return {
+            x: this.x - 8 + Math.cos(angle) * 36,
+            y: this.y + 6 + Math.sin(angle) * 22
+        };
+    }
+
+    gateSpot (): { x: number; y: number } {
+        return { x: this.x + 78, y: this.y + 42 };
+    }
 }
 
 function ensureSheepfoldTexture (scene: Scene): void {

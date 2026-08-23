@@ -19,7 +19,7 @@ const SHEEP_TINT: Record<string, number> = {
     Milo: 0xd5cce6
 };
 
-export type SheepMood = 'waiting' | 'following' | 'drinking' | 'eating';
+export type SheepMood = 'waiting' | 'following' | 'drinking' | 'eating' | 'hurt' | 'penned';
 export type SheepEvent = 'found' | 'ate' | 'drank' | null;
 
 export class Sheep {
@@ -27,6 +27,8 @@ export class Sheep {
     readonly sprite: GameObjects.Sprite;
     thirsty = false;
     hungry = false;
+    hurt = false;
+    discovered = false;
     mood: SheepMood = 'waiting';
     private readonly body: Physics.Arcade.Body;
     private readonly scene: Scene;
@@ -34,6 +36,7 @@ export class Sheep {
     private readonly shadow: GameObjects.Image;
     private drinkUntil = 0;
     private eatUntil = 0;
+    private penTarget: { x: number; y: number } | null = null;
 
     constructor (scene: Scene, x: number, y: number, name: string, followSlot: number) {
         this.scene = scene;
@@ -67,6 +70,51 @@ export class Sheep {
         this.body.setVelocity(0, 0);
     }
 
+    trapInHole (): void {
+        this.hurt = true;
+        this.mood = 'hurt';
+        this.sprite.setAngle(32);
+        this.sprite.setTint(0xe8a898);
+        this.shadow.setAlpha(0.25);
+        this.body.setImmovable(true);
+        this.body.setVelocity(0, 0);
+    }
+
+    heal (): void {
+        this.hurt = false;
+        this.sprite.setAngle(0);
+        this.sprite.setTint(SHEEP_TINT[this.name] ?? 0xffffff);
+        this.shadow.setAlpha(1);
+        this.beginFollowing();
+        this.placeShadow();
+    }
+
+    markDiscovered (): void {
+        this.discovered = true;
+    }
+
+    enterPen (x: number, y: number): void {
+        this.mood = 'penned';
+        this.penTarget = { x, y };
+        this.body.setImmovable(false);
+        this.body.setVelocity(0, 0);
+    }
+
+    settleInPen (x: number, y: number): void {
+        this.mood = 'penned';
+        this.penTarget = null;
+        this.sprite.setPosition(x, y);
+        this.sprite.setAngle(0);
+        this.body.setVelocity(0, 0);
+        this.body.setImmovable(true);
+        this.placeShadow();
+    }
+
+    leavePen (): void {
+        this.beginFollowing();
+        this.penTarget = null;
+    }
+
     update (shepherd: Shepherd, water: WaterSource[], grass: GrassPatch[]): SheepEvent {
         const now = this.scene.time.now;
         const dist = Math.hypot(shepherd.sprite.x - this.sprite.x, shepherd.sprite.y - this.sprite.y);
@@ -96,6 +144,43 @@ export class Sheep {
                 this.hungry = false;
             }
 
+            return null;
+        }
+
+        if (this.mood === 'hurt') {
+            this.body.setVelocity(0, 0);
+            this.sprite.setAngle(32);
+            this.placeShadow();
+
+            if (!this.discovered && dist < NOTICE_DISTANCE) {
+                this.discovered = true;
+                return 'found';
+            }
+
+            return null;
+        }
+
+        if (this.mood === 'penned') {
+            if (this.penTarget) {
+                const dist = Math.hypot(this.penTarget.x - this.sprite.x, this.penTarget.y - this.sprite.y);
+
+                if (dist > 12) {
+                    this.moveToward(this.penTarget.x, this.penTarget.y, FOLLOW_SPEED);
+                    this.sprite.setAngle(Math.sin(now / 90) * WADDLE_DEG);
+                    this.faceVelocity();
+                }
+                else {
+                    this.penTarget = null;
+                    this.body.setVelocity(0, 0);
+                    this.body.setImmovable(true);
+                    this.sprite.setAngle(0);
+                }
+            }
+            else {
+                this.body.setVelocity(0, 0);
+            }
+
+            this.placeShadow();
             return null;
         }
 

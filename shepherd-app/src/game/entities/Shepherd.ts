@@ -13,6 +13,8 @@ export class Shepherd {
     private readonly keys: { W?: Input.Keyboard.Key; A?: Input.Keyboard.Key; S?: Input.Keyboard.Key; D?: Input.Keyboard.Key };
     private target: PMath.Vector2 | null = null;
     private staffEquipped = false;
+    private lyingDown = false;
+    private whiteRobe = false;
 
     constructor (scene: Scene, x: number, y: number) {
         ensureShepherdTextures(scene);
@@ -32,7 +34,11 @@ export class Shepherd {
             ? keyboard.addKeys('W,A,S,D') as { W: Input.Keyboard.Key; A: Input.Keyboard.Key; S: Input.Keyboard.Key; D: Input.Keyboard.Key }
             : {};
 
-        scene.input.on('pointerdown', (pointer: Input.Pointer) => {
+        scene.input.on('pointerdown', (pointer: Input.Pointer, currentlyOver: GameObjects.GameObject[]) => {
+            if (currentlyOver?.some((obj) => obj.getData('ui'))) {
+                return;
+            }
+
             this.target = new PMath.Vector2(pointer.worldX, pointer.worldY);
         });
     }
@@ -41,12 +47,52 @@ export class Shepherd {
         return this.staffEquipped;
     }
 
+    get wearsWhite (): boolean {
+        return this.whiteRobe;
+    }
+
     equipStaff (equipped = true): void {
         this.staffEquipped = equipped;
-        this.sprite.setTexture(equipped ? 'shepherd-staff' : 'shepherd');
+        this.applyTexture();
+    }
+
+    wearWhite (): void {
+        this.whiteRobe = true;
+        this.applyTexture();
+    }
+
+    lieDown (x: number, y: number): void {
+        this.lyingDown = true;
+        this.target = null;
+        this.sprite.setPosition(x, y);
+        this.sprite.setAngle(90);
+        this.body.setVelocity(0, 0);
+        this.body.setImmovable(true);
+        this.placeShadow();
+    }
+
+    wake (): void {
+        this.lyingDown = false;
+        this.target = null;
+        this.sprite.setAngle(0);
+        this.body.setImmovable(false);
+        this.body.setVelocity(0, 0);
+        this.placeShadow();
+    }
+
+    private applyTexture (): void {
+        const key = this.whiteRobe
+            ? (this.staffEquipped ? 'shepherd-staff-white' : 'shepherd-white')
+            : (this.staffEquipped ? 'shepherd-staff' : 'shepherd');
+        this.sprite.setTexture(key);
     }
 
     update (): void {
+        if (this.lyingDown) {
+            this.body.setVelocity(0, 0);
+            this.placeShadow();
+            return;
+        }
         const left = this.keys.A?.isDown ? -1 : 0;
         const right = this.keys.D?.isDown ? 1 : 0;
         const up = this.keys.W?.isDown ? -1 : 0;
@@ -98,43 +144,49 @@ export class Shepherd {
 }
 
 function ensureShepherdTextures (scene: Scene): void {
-    if (scene.textures.exists('shepherd') && scene.textures.exists('shepherd-staff')) {
+    const keys = ['shepherd', 'shepherd-staff', 'shepherd-white', 'shepherd-staff-white'];
+
+    if (keys.every((key) => scene.textures.exists(key))) {
         return;
     }
 
-    if (scene.textures.exists('shepherd')) {
-        scene.textures.remove('shepherd');
-    }
-
-    if (scene.textures.exists('shepherd-staff')) {
-        scene.textures.remove('shepherd-staff');
+    for (const key of keys) {
+        if (scene.textures.exists(key)) {
+            scene.textures.remove(key);
+        }
     }
 
     const g = scene.add.graphics();
-    drawShepherd(g, false);
+    drawShepherd(g, false, false);
     g.generateTexture('shepherd', SHEPHERD_W, SHEPHERD_H);
     g.clear();
-    drawShepherd(g, true);
+    drawShepherd(g, true, false);
     g.generateTexture('shepherd-staff', SHEPHERD_W, SHEPHERD_H);
+    g.clear();
+    drawShepherd(g, false, true);
+    g.generateTexture('shepherd-white', SHEPHERD_W, SHEPHERD_H);
+    g.clear();
+    drawShepherd(g, true, true);
+    g.generateTexture('shepherd-staff-white', SHEPHERD_W, SHEPHERD_H);
     g.destroy();
 }
 
-function drawShepherd (g: GameObjects.Graphics, withStaff: boolean): void {
+function drawShepherd (g: GameObjects.Graphics, withStaff: boolean, white: boolean): void {
     if (withStaff) {
-        g.fillStyle(0x7a5c3e, 1);
+        g.fillStyle(white ? 0xd8c4a0 : 0x7a5c3e, 1);
         g.fillRect(31, 14, 3, 30);
         g.fillCircle(30, 13, 3.5);
         g.fillCircle(26, 11, 3.5);
         g.fillCircle(23, 14, 3);
-        g.fillStyle(0xb08960, 1);
+        g.fillStyle(white ? 0xf4ead8 : 0xb08960, 1);
         g.fillRect(32, 18, 1, 18);
     }
 
-    g.fillStyle(0x4a3728, 1);
+    g.fillStyle(white ? 0xe8e4dc : 0x4a3728, 1);
     g.fillEllipse(22, 34, 24, 18);
     g.fillCircle(22, 28, 13);
 
-    g.fillStyle(0x5c4634, 1);
+    g.fillStyle(white ? 0xf7f3ea : 0x5c4634, 1);
     g.fillCircle(19, 27, 6);
 
     g.fillStyle(0x3d2c1e, 1);

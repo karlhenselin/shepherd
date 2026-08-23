@@ -31,4 +31,3 @@ Surely goodness and mercy will follow me
 all the days of my life,  
 and I will dwell in the house of the LORD  
 forever. 
-c

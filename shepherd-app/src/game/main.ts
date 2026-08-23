@@ -2,6 +2,7 @@ import { Boot } from './scenes/Boot';
 import { AUTO, Game } from 'phaser';
 import { IntroScene } from './scenes/IntroScene';
 import { Preloader } from './scenes/Preloader';
+import { SettingsScene } from './scenes/SettingsScene';
 import { WorldScene } from './scenes/WorldScene';
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -20,7 +21,8 @@ const config: Phaser.Types.Core.GameConfig = {
         Boot,
         Preloader,
         IntroScene,
-        WorldScene
+        WorldScene,
+        SettingsScene
     ]
 };
 
