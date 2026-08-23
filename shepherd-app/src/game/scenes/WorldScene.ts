@@ -1,7 +1,7 @@
 import { Scene, GameObjects, Scenes } from 'phaser';
 import { Shepherd } from '../entities/Shepherd';
 import { Sheep } from '../entities/Sheep';
-import { findPointAwayFromAll, START_COL, START_ROW, WORLD_HEIGHT, WORLD_WIDTH, startCenter } from '../world/constants';
+import { findPointAwayFromAll, WORLD_HEIGHT, WORLD_WIDTH, startCenter } from '../world/constants';
 import { GrassPatch, placePasture } from '../world/GrassPatch';
 import { WaterSource } from '../world/WaterSource';
 import { watercolorWorld } from '../world/watercolorWorld';
@@ -41,7 +41,7 @@ export class WorldScene extends Scene {
 
         const ground = watercolorWorld();
         const start = startCenter();
-        ground.ensure(this, START_COL, START_ROW);
+        ground.beginCreation();
         ground.attachToWorld(this);
 
         this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
@@ -97,7 +97,7 @@ export class WorldScene extends Scene {
 
     update (): void {
         this.shepherd.update();
-        watercolorWorld().paintTrail(this.shepherd.sprite.x, this.shepherd.sprite.y);
+        watercolorWorld().rainIntoView(this);
         watercolorWorld().tick(this, this.time.now);
 
         for (const sheep of this.flock) {

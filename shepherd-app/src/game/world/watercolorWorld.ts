@@ -52,6 +52,8 @@ type PaintBlob = {
     x: number;
     y: number;
     radius: number;
+    width: number;
+    height: number;
     painter: { canvas: HTMLCanvasElement; step: () => boolean };
     texture: Textures.CanvasTexture;
     done: boolean;
@@ -180,8 +182,7 @@ export class WatercolorWorld {
         this.nextBlobId += 1;
 
         const rng = mulberry32(spec.seed);
-        const size = blobSize(spec.rx, spec.ry);
-        const painter = createBlobPainter(size, spec, rng);
+        const painter = createBlobPainter(spec, rng);
 
         if (scene.textures.exists(key)) {
             scene.textures.remove(key);
@@ -198,6 +199,8 @@ export class WatercolorWorld {
             x: spec.x,
             y: spec.y,
             radius: Math.max(spec.rx, spec.ry),
+            width: spec.rx * 2.3,
+            height: spec.ry * 2.3,
             painter,
             texture,
             done: false
@@ -209,11 +212,13 @@ export class WatercolorWorld {
 
     private placeBlob (scene: Scene, blob: PaintBlob): GameObjects.Image {
         if (blob.image?.active && blob.image.scene === scene) {
-            blob.image.setPosition(blob.x, blob.y);
-            return blob.image;
+        blob.image.setPosition(blob.x, blob.y);
+        blob.image.setDisplaySize(blob.width, blob.height);
+        return blob.image;
         }
 
         blob.image = scene.add.image(blob.x, blob.y, blob.key).setDepth(BLOB_DEPTH);
+        blob.image.setDisplaySize(blob.width, blob.height);
         return blob.image;
     }
 
@@ -335,10 +340,10 @@ export function watercolorWorld (): WatercolorWorld {
 }
 
 function createBlobPainter (
-    size: number,
     spec: DropSpec,
     rng: () => number
 ): { canvas: HTMLCanvasElement; step: () => boolean } {
+    const size = 256;
     const canvas = document.createElement('canvas');
     canvas.width = size;
     canvas.height = size;
@@ -348,11 +353,12 @@ function createBlobPainter (
         throw new Error('Could not create watercolor blob canvas');
     }
 
+    const aspect = spec.ry / Math.max(spec.rx, 1);
     const wash: Wash = {
         x: 0.5,
         y: 0.5,
-        rx: spec.rx / size,
-        ry: spec.ry / size,
+        rx: 0.38,
+        ry: 0.38 * aspect,
         color: spec.color,
         sides: 7 + Math.floor(rng() * 4)
     };
@@ -371,11 +377,6 @@ function createBlobPainter (
             return layer < LAYERS;
         }
     };
-}
-
-function blobSize (rx: number, ry: number): number {
-    const raw = Math.max(rx, ry) * 2.2;
-    return Math.max(192, Math.min(768, Math.ceil(raw / 8) * 8));
 }
 
 function trailColor (x: number, y: number, rng: () => number): string {

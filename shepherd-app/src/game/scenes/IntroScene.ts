@@ -1,7 +1,7 @@
 import { GameObjects, Scene } from 'phaser';
 import { GENESIS_1_1 } from '../data/scripture';
 import { speakCue, stopSpeech } from '../ui/speech';
-import { START_COL, START_ROW } from '../world/constants';
+import { startCenter } from '../world/constants';
 import { watercolorWorld } from '../world/watercolorWorld';
 
 const WARM_WHITE = '#f4ead8';
@@ -29,18 +29,19 @@ export class IntroScene extends Scene {
             fontSize: '42px',
             color: WARM_WHITE,
             align: 'center'
-        }).setOrigin(0.5).setAlpha(0).setDepth(10);
+        }).setOrigin(0.5).setAlpha(0).setDepth(10).setScrollFactor(0);
 
         this.citation = this.add.text(cx, cy + 36, '', {
             fontFamily: 'Georgia, Palatino, serif',
             fontSize: '18px',
             color: UMBER,
             align: 'center'
-        }).setOrigin(0.5).setAlpha(0).setDepth(10);
+        }).setOrigin(0.5).setAlpha(0).setDepth(10).setScrollFactor(0);
 
         this.wipe = this.add.rectangle(cx, cy, width, 2, 0xffffff)
             .setScale(0, 1)
-            .setDepth(5);
+            .setDepth(5)
+            .setScrollFactor(0);
 
         this.input.on('pointerdown', () => {
             if (this.sound.locked) {
@@ -139,22 +140,17 @@ export class IntroScene extends Scene {
 
         this.cameras.main.setBackgroundColor(0xf7f3ea);
         this.wipe.setVisible(false);
+        this.cameras.main.centerOn(startCenter().x, startCenter().y);
     }
 
     private async appearWatercolors (): Promise<void> {
-        const { width, height } = this.scale;
         const ground = watercolorWorld();
-        const region = ground.ensure(this, START_COL, START_ROW);
+        ground.beginCreation();
 
-        if (!region) {
-            return;
-        }
-
-        ground.placeImage(this, region, width / 2, height / 2, 1);
-
-        while (!region.done && this.here()) {
-            ground.step(region);
-            await this.wait(110);
+        while (this.here() && !ground.creationSpawned()) {
+            ground.rainIntoView(this);
+            ground.tick(this, this.time.now);
+            await this.wait(70);
         }
     }
 
