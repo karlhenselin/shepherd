@@ -19,6 +19,9 @@ export class Preloader extends Scene
 
         this.load.image('logo', 'logo.png');
         this.load.image('sheep', 'sheep.png');
+        this.load.image('sheepfold', 'sheepfold.png');
+        this.load.image('water-source', 'water.png');
+        this.load.audio('exhale', 'audio/exhale.mp3');
     }
 
     create ()

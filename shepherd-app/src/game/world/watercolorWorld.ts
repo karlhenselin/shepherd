@@ -10,16 +10,19 @@ import { Wash, mulberry32, paintWash } from './watercolorPaint';
 
 const LAYERS = 8;
 const STEP_MS = 80;
-const BLOB_DEPTH = 1;
+const CREATION_DEPTH = 0;
+const RAIN_DEPTH = 1;
 const CELL = 128;
 const VIEW_PAD = 240;
 const MAX_PENDING = 8;
 const FALL_PX = 210;
 
-const HEAVENS: Wash[] = [
-    { x: 0.50, y: 0.20, rx: 0.72, ry: 0.32, color: '#f0e4d0', sides: 10 },
-    { x: 0.28, y: 0.16, rx: 0.36, ry: 0.22, color: '#e8c992', sides: 8 },
-    { x: 0.74, y: 0.14, rx: 0.34, ry: 0.20, color: '#d4b896', sides: 8 },
+type HeavenWash = Wash & { sky?: string };
+
+const HEAVENS: HeavenWash[] = [
+    { x: 0.50, y: 0.20, rx: 0.72, ry: 0.32, color: '#f0e4d0', sky: '#c5d8ea', sides: 10 },
+    { x: 0.28, y: 0.16, rx: 0.36, ry: 0.22, color: '#e8c992', sky: '#8eafd0', sides: 8 },
+    { x: 0.74, y: 0.14, rx: 0.34, ry: 0.20, color: '#d4b896', sky: '#7a9cc4', sides: 8 },
     { x: 0.50, y: 0.38, rx: 0.58, ry: 0.16, color: '#f0d5a8', sides: 8 },
     { x: 0.22, y: 0.30, rx: 0.24, ry: 0.12, color: '#f7f0e4', sides: 7 },
     { x: 0.68, y: 0.26, rx: 0.26, ry: 0.12, color: '#fff8ee', sides: 7 }
@@ -45,6 +48,8 @@ type DropSpec = {
     color: string;
     alpha: number;
     seed: number;
+    creation?: boolean;
+    groundColor?: string;
 };
 
 type PaintBlob = {
@@ -54,6 +59,8 @@ type PaintBlob = {
     radius: number;
     width: number;
     height: number;
+    depth: number;
+    spec: DropSpec;
     painter: { canvas: HTMLCanvasElement; step: () => boolean };
     texture: Textures.CanvasTexture;
     done: boolean;
@@ -77,7 +84,7 @@ export class WatercolorWorld {
         this.painted = new Uint8Array(this.gridCols * this.gridRows);
     }
 
-    beginCreation (): void {
+    beginCreation (asSky = false): void {
         if (this.creationStarted) {
             return;
         }
@@ -89,14 +96,18 @@ export class WatercolorWorld {
         const originY = start.y - REGION_HEIGHT / 2;
 
         for (const [index, wash] of [...HEAVENS, ...EARTH].entries()) {
+            const sky = 'sky' in wash ? wash.sky : undefined;
+
             this.creationQueue.push({
                 x: originX + wash.x * REGION_WIDTH,
                 y: originY + wash.y * REGION_HEIGHT,
                 rx: wash.rx * REGION_WIDTH,
                 ry: wash.ry * REGION_HEIGHT,
-                color: wash.color,
+                color: asSky && sky ? sky : wash.color,
                 alpha: wash.y < 0.5 ? 0.13 : 0.11,
-                seed: seedFor(index + 1)
+                seed: seedFor(index + 1),
+                creation: true,
+                groundColor: asSky && sky ? wash.color : undefined
             });
         }
     }
@@ -106,11 +117,17 @@ export class WatercolorWorld {
     }
 
     attachToWorld (scene: Scene): void {
+        this.settleSkyToGround();
         this.stripOldRegionTiles(scene);
+        this.painted.fill(0);
 
         for (const blob of this.blobs) {
             this.placeBlob(scene, blob);
-            blob.image?.setPosition(blob.x, blob.y).setAlpha(1);
+            blob.image?.setPosition(blob.x, blob.y).setAlpha(1).setDepth(blob.depth);
+
+            if (blob.depth === RAIN_DEPTH) {
+                this.markCoverage(blob.x, blob.y, blob.radius);
+            }
         }
     }
 
@@ -163,6 +180,34 @@ export class WatercolorWorld {
         }
     }
 
+    private settleSkyToGround (): void {
+        for (const spec of this.creationQueue) {
+            if (!spec.groundColor) {
+                continue;
+            }
+
+            spec.color = spec.groundColor;
+            spec.groundColor = undefined;
+        }
+
+        for (const blob of this.blobs) {
+            if (!blob.spec.groundColor) {
+                continue;
+            }
+
+            blob.spec.color = blob.spec.groundColor;
+            blob.spec.groundColor = undefined;
+            blob.painter = createBlobPainter(blob.spec, mulberry32(blob.spec.seed), blob.painter.canvas);
+
+            for (let layer = 0; layer < LAYERS; layer++) {
+                blob.painter.step();
+            }
+
+            blob.done = true;
+            blob.texture.refresh();
+        }
+    }
+
     private spawnNext (scene: Scene): void {
         const spec = this.creationQueue.shift() ?? this.pending.shift();
 
@@ -172,7 +217,11 @@ export class WatercolorWorld {
 
         const blob = this.createBlob(scene, spec);
         this.blobs.push(blob);
-        this.markCoverage(blob.x, blob.y, blob.radius);
+
+        if (!spec.creation) {
+            this.markCoverage(blob.x, blob.y, blob.radius);
+        }
+
         this.stepBlob(blob);
         this.fallIn(scene, blob, spec.seed);
     }
@@ -201,6 +250,8 @@ export class WatercolorWorld {
             radius: Math.max(spec.rx, spec.ry),
             width: spec.rx * 2.3,
             height: spec.ry * 2.3,
+            depth: spec.creation ? CREATION_DEPTH : RAIN_DEPTH,
+            spec,
             painter,
             texture,
             done: false
@@ -214,10 +265,11 @@ export class WatercolorWorld {
         if (blob.image?.active && blob.image.scene === scene) {
             blob.image.setPosition(blob.x, blob.y);
             blob.image.setDisplaySize(blob.width, blob.height);
+            blob.image.setDepth(blob.depth);
             return blob.image;
         }
 
-        blob.image = scene.add.image(blob.x, blob.y, blob.key).setDepth(BLOB_DEPTH);
+        blob.image = scene.add.image(blob.x, blob.y, blob.key).setDepth(blob.depth);
         blob.image.setDisplaySize(blob.width, blob.height);
         return blob.image;
     }
@@ -346,16 +398,25 @@ export function watercolorWorld (): WatercolorWorld {
 
 function createBlobPainter (
     spec: DropSpec,
-    rng: () => number
+    rng: () => number,
+    existing?: HTMLCanvasElement
 ): { canvas: HTMLCanvasElement; step: () => boolean } {
     const size = 256;
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
+    const canvas = existing ?? document.createElement('canvas');
+
+    if (!existing) {
+        canvas.width = size;
+        canvas.height = size;
+    }
+
     const ctx = canvas.getContext('2d');
 
     if (!ctx) {
         throw new Error('Could not create watercolor blob canvas');
+    }
+
+    if (existing) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 
     const aspect = spec.ry / Math.max(spec.rx, 1);

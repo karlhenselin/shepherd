@@ -4,6 +4,7 @@ import { Sheep } from '../entities/Sheep';
 import { findPointAwayFromAll, WORLD_HEIGHT, WORLD_WIDTH, startCenter } from '../world/constants';
 import { GrassPatch, placePasture } from '../world/GrassPatch';
 import { WaterSource } from '../world/WaterSource';
+import { Sheepfold } from '../world/Sheepfold';
 import { watercolorWorld } from '../world/watercolorWorld';
 import { speakCue, stopSpeech } from '../ui/speech';
 import { psalm23Line } from '../data/scripture';
@@ -17,6 +18,7 @@ export class WorldScene extends Scene {
     private flock: Sheep[] = [];
     private grass: GrassPatch[] = [];
     private water: WaterSource[] = [];
+    private sheepfold!: Sheepfold;
     private cueText!: GameObjects.Text;
     private lastCue = '';
     private scriptId = 0;
@@ -55,8 +57,11 @@ export class WorldScene extends Scene {
         const waterAt = { x: start.x + 270, y: start.y + 210 };
         this.water = [new WaterSource(this, waterAt.x, waterAt.y)];
 
+        const foldAt = { x: WORLD_WIDTH - 320, y: WORLD_HEIGHT - 260 };
+        this.sheepfold = new Sheepfold(this, foldAt.x, foldAt.y);
+
         const pasture = findPointAwayFromAll(
-            [start, waterAt],
+            [start, waterAt, foldAt],
             700,
             400
         );
@@ -385,7 +390,8 @@ export class WorldScene extends Scene {
             { x: this.shepherd.sprite.x, y: this.shepherd.sprite.y },
             ...this.flock.map((sheep) => ({ x: sheep.sprite.x, y: sheep.sprite.y })),
             ...this.grass,
-            ...this.water
+            ...this.water,
+            this.sheepfold
         ];
         const spawn = findPointAwayFromAll(placed, 1400, 1200);
         this.flock.push(new Sheep(this, spawn.x, spawn.y, name, slot));

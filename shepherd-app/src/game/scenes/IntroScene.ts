@@ -100,8 +100,12 @@ export class IntroScene extends Scene {
             this.appearWatercolors()
         ]);
 
-        this.sound.stopByKey('exhale');
-        await this.wait(1600);
+        if (this.here() && this.sound.isPlaying('exhale')) {
+            await this.untilExhaleEnds();
+        }
+        else {
+            await this.wait(1600);
+        }
 
         if (!this.here()) {
             return;
@@ -145,10 +149,9 @@ export class IntroScene extends Scene {
 
     private async appearWatercolors (): Promise<void> {
         const ground = watercolorWorld();
-        ground.beginCreation();
+        ground.beginCreation(true);
 
         while (this.here() && !ground.creationSpawned()) {
-            ground.rainIntoView(this);
             ground.tick(this, this.time.now);
             await this.wait(70);
         }
@@ -184,17 +187,33 @@ export class IntroScene extends Scene {
                 volume: 0.7,
                 rate: 0.2,
                 loop: false,
-                detune:370
+                detune: 370
             });
         };
 
+        start();
+
         if (this.sound.locked) {
             this.sound.once('unlocked', start);
-            this.sound.unlock();
-            return;
         }
+    }
 
-        start();
+    private untilExhaleEnds (): Promise<void> {
+        return new Promise((resolve) => {
+            let settled = false;
+            const done = (): void => {
+                if (settled) {
+                    return;
+                }
+
+                settled = true;
+                resolve();
+            };
+
+            const playing = this.sound.getAllPlaying().find((sound) => sound.key === 'exhale');
+            playing?.once('complete', done);
+            this.time.delayedCall(8000, done);
+        });
     }
 
     private wait (ms: number): Promise<void> {
