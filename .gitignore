@@ -4,6 +4,9 @@ dist
 dist-ssr
 *.local
 
+# Source audio (use converted assets in shepherd-app/public)
+*.wav
+
 # Env and secrets
 .env
 .env.*
