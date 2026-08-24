@@ -10,7 +10,7 @@ import { StaffPickup } from '../world/StaffPickup';
 import { watercolorWorld } from '../world/watercolorWorld';
 import { speakCue, stopSpeech } from '../ui/speech';
 import { startHowling, stopHowling } from '../audio/howl';
-import { isaiah53Line, john10Line, psalm23Comfort, psalm23Half } from '../data/scripture';
+import { corinthians15Line, isaiah53Line, john10Line, psalm23Comfort, psalm23Half } from '../data/scripture';
 import { LostSheepHint } from '../ui/LostSheepHint';
 import { GameSave, StoryCheckpoint, loadSave, writeSave } from '../save/gameSave';
 
@@ -44,7 +44,9 @@ export class WorldScene extends Scene {
     private heardPsalm4c = false;
     private heardJohn102 = false;
     private heardJohn109 = false;
+    private heardCorinthians = false;
     private nightStarted = false;
+    private sleepVeil!: GameObjects.Rectangle;
     private walkFrom: { x: number; y: number } | null = null;
 
     constructor () {
@@ -102,6 +104,12 @@ export class WorldScene extends Scene {
             .setOrigin(0)
             .setScrollFactor(0)
             .setDepth(15)
+            .setAlpha(0);
+
+        this.sleepVeil = this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 1)
+            .setOrigin(0)
+            .setScrollFactor(0)
+            .setDepth(19)
             .setAlpha(0);
 
         this.lostHint = new LostSheepHint(this);
@@ -332,7 +340,7 @@ export class WorldScene extends Scene {
             return `Bandage ${hurt.name}.`;
         }
 
-        if (this.heardJohn109) {
+        if (this.heardJohn109 && !this.heardCorinthians) {
             return 'The flock is home.';
         }
 
@@ -462,6 +470,10 @@ export class WorldScene extends Scene {
         if (checkpoint === 'john-10-9') {
             this.heardJohn109 = true;
         }
+
+        if (checkpoint === '1-cor-15-51') {
+            this.heardCorinthians = true;
+        }
     }
 
     private saveProgress (checkpoint: StoryCheckpoint): void {
@@ -487,6 +499,8 @@ export class WorldScene extends Scene {
             heardPsalm4c: this.heardPsalm4c,
             heardJohn102: this.heardJohn102,
             heardJohn109: this.heardJohn109,
+            heardCorinthians: this.heardCorinthians,
+            whiteRobe: this.shepherd.wearsWhite,
             hasStaff: this.shepherd.hasStaff
         });
     }
@@ -504,6 +518,7 @@ export class WorldScene extends Scene {
         this.heardPsalm4c = save.heardPsalm4c === true;
         this.heardJohn102 = save.heardJohn102 === true;
         this.heardJohn109 = save.heardJohn109 === true;
+        this.heardCorinthians = save.heardCorinthians === true;
 
         save.foundNames.forEach((name, slot) => {
             const angle = (slot / Math.max(save.foundNames.length, 1)) * Math.PI * 2;
@@ -532,29 +547,37 @@ export class WorldScene extends Scene {
             this.spawnNextSheep();
         }
 
-        if (this.heardPsalm4a) {
+        if (this.heardPsalm4a && !this.heardCorinthians) {
             this.applyNight(false);
         }
-        else if (this.heardPsalm3b) {
+        else if (this.heardPsalm3b && !this.heardCorinthians) {
             this.beginNight();
         }
         else if (this.heardPsalm3 && !this.heardPsalm3b) {
             this.beginWalkWatch();
         }
 
-        if (this.heardPsalm4a && !this.heardPsalm4b) {
+        if (this.heardPsalm4a && !this.heardPsalm4b && !this.heardCorinthians) {
             this.beginWalkWatch();
         }
 
         if (save.hasStaff) {
             this.shepherd.equipStaff(true);
         }
-        else if (this.heardPsalm4c) {
+        else if (this.heardPsalm4c && !this.heardCorinthians) {
             this.placeStaff(false);
         }
 
-        if (this.heardJohn109) {
+        if (save.whiteRobe || this.heardCorinthians) {
+            this.shepherd.wearWhite();
+        }
+
+        if (this.heardJohn109 && this.heardCorinthians) {
+            this.placeAtFoldAwake();
+        }
+        else if (this.heardJohn109) {
             this.settleFold();
+            this.beginMystery();
         }
     }
 
@@ -581,6 +604,7 @@ export class WorldScene extends Scene {
         this.heardPsalm4c = false;
         this.heardJohn102 = false;
         this.heardJohn109 = false;
+        this.heardCorinthians = false;
         this.nightStarted = false;
         this.staffPickup = null;
         this.walkFrom = null;
@@ -782,7 +806,9 @@ export class WorldScene extends Scene {
             sheep.enterPen(rest.x, rest.y);
         });
         this.shepherd.lieDown(this.sheepfold.gateSpot().x, this.sheepfold.gateSpot().y);
-        this.playLines([john10Line(9)]);
+        this.playLines([john10Line(9)], () => {
+            this.beginMystery();
+        });
     }
 
     private settleFold (): void {
@@ -791,6 +817,75 @@ export class WorldScene extends Scene {
             sheep.settleInPen(rest.x, rest.y);
         });
         this.shepherd.lieDown(this.sheepfold.gateSpot().x, this.sheepfold.gateSpot().y);
+    }
+
+    private placeAtFoldAwake (): void {
+        const gate = this.sheepfold.gateSpot();
+        this.shepherd.sprite.setPosition(gate.x, gate.y);
+        this.shepherd.wake();
+        this.flock.forEach((sheep, slot) => {
+            const rest = this.sheepfold.restSpot(slot);
+            sheep.sprite.setPosition(rest.x, rest.y);
+            sheep.leavePen();
+        });
+        this.nightStarted = false;
+        this.nightVeil.setAlpha(0);
+        this.sleepVeil.setAlpha(0);
+        this.styleCueForDay();
+    }
+
+    private beginMystery (): void {
+        if (this.heardCorinthians) {
+            return;
+        }
+
+        this.scriptPlaying = true;
+        this.styleCueForDark();
+        this.cueText.setText('');
+        this.lastCue = '';
+        this.tweens.add({
+            targets: this.sleepVeil,
+            alpha: 1,
+            duration: 1800,
+            ease: 'Sine.easeInOut',
+            onComplete: () => {
+                if (!this.sys.isActive()) {
+                    return;
+                }
+
+                this.shepherd.wearWhite();
+                this.playLines([corinthians15Line()], () => {
+                    this.beginDawn();
+                });
+            }
+        });
+    }
+
+    private beginDawn (): void {
+        this.nightStarted = false;
+        this.shepherd.wake();
+        this.flock.forEach((sheep) => sheep.leavePen());
+        this.tweens.add({
+            targets: [this.sleepVeil, this.nightVeil],
+            alpha: 0,
+            duration: 1800,
+            ease: 'Sine.easeInOut',
+            onComplete: () => {
+                if (this.sys.isActive()) {
+                    this.styleCueForDay();
+                }
+            }
+        });
+    }
+
+    private styleCueForDark (): void {
+        this.cueText.setColor('#f4ead8');
+        this.cueText.setBackgroundColor('#000000cc');
+    }
+
+    private styleCueForDay (): void {
+        this.cueText.setColor('#3d2c1e');
+        this.cueText.setBackgroundColor('#f3ead8cc');
     }
 
     private applyNight (animate: boolean): void {
@@ -870,6 +965,10 @@ function checkpointForLine (line: string): StoryCheckpoint | null {
 
     if (line.includes('John 10:9')) {
         return 'john-10-9';
+    }
+
+    if (line.includes('1 Corinthians 15:51')) {
+        return '1-cor-15-51';
     }
 
     return null;
