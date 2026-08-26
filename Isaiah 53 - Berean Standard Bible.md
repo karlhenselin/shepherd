@@ -1,0 +1,1 @@
+ 6 We all like sheep have gone astray, each one has turned to his own way;

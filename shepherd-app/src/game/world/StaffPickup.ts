@@ -32,17 +32,32 @@ export class StaffPickup {
 
 function ensureStaffTexture (scene: Scene): void {
     if (scene.textures.exists(TEXTURE_KEY)) {
-        return;
+        scene.textures.remove(TEXTURE_KEY);
     }
 
     const g = scene.add.graphics();
+    const thick = 2.5;
+    const shaftX = 8;
+    const top = 12;
+    const length = 30;
+    const hookR = 6.5;
+    const mid = shaftX + thick / 2;
+    const cx = mid + hookR;
+    const cy = top;
+    const start = Math.PI;
+    const end = Math.PI * 2 + 0.95;
+    const steps = 20;
+
     g.fillStyle(0x7a5c3e, 1);
-    g.fillRect(18, 6, 5, 36);
-    g.fillCircle(16, 8, 5);
-    g.fillCircle(12, 7, 4.5);
-    g.fillCircle(9, 11, 4);
+    g.fillRect(shaftX, top, thick, length);
+
+    for (let i = 0; i <= steps; i++) {
+        const a = start + (end - start) * (i / steps);
+        g.fillCircle(cx + Math.cos(a) * hookR, cy + Math.sin(a) * hookR, thick / 2);
+    }
+
     g.fillStyle(0xb08960, 1);
-    g.fillRect(19, 10, 2, 24);
+    g.fillRect(shaftX + 1, top + 5, 1, length - 10);
     g.generateTexture(TEXTURE_KEY, 28, 46);
     g.destroy();
 }

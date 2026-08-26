@@ -52,6 +52,30 @@ export function findPointAwayFromAll (
     return { x: origin.x + minFromOrigin, y: origin.y };
 }
 
+export function farthestCornerFrom (point: { x: number; y: number }): { x: number; y: number } {
+    const padX = 320;
+    const padY = 260;
+    const corners = [
+        { x: padX, y: padY },
+        { x: WORLD_WIDTH - padX, y: padY },
+        { x: padX, y: WORLD_HEIGHT - padY },
+        { x: WORLD_WIDTH - padX, y: WORLD_HEIGHT - padY }
+    ];
+    let best = corners[0];
+    let bestDist = -1;
+
+    for (const corner of corners) {
+        const dist = Math.hypot(corner.x - point.x, corner.y - point.y);
+
+        if (dist > bestDist) {
+            bestDist = dist;
+            best = corner;
+        }
+    }
+
+    return best;
+}
+
 function clamp (value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));
 }

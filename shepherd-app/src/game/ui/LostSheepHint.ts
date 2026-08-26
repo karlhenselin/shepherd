@@ -14,13 +14,13 @@ export class LostSheepHint {
         this.arrow.setVisible(false);
     }
 
-    update (scene: Scene, shepherd: Shepherd, target: { x: number; y: number } | null): void {
+    update (scene: Scene, shepherd: Shepherd, target: { x: number; y: number } | null, keepOnScreen = false): void {
         if (!target) {
             this.arrow.setVisible(false);
             return;
         }
 
-        if (isOnScreen(scene, target.x, target.y)) {
+        if (!keepOnScreen && isOnScreen(scene, target.x, target.y)) {
             this.arrow.setVisible(false);
             return;
         }

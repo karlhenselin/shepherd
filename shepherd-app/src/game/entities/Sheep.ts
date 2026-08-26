@@ -6,6 +6,7 @@ import { WaterSource } from '../world/WaterSource';
 const FOLLOW_SPEED = 150;
 const NOTICE_DISTANCE = 110;
 const FOLLOW_DISTANCE = 56;
+const NIGHT_FOLLOW_DISTANCE = 36;
 const DRINK_MS = 2600;
 const EAT_MS = 2600;
 const SHEEP_SIZE = 48;
@@ -115,7 +116,7 @@ export class Sheep {
         this.penTarget = null;
     }
 
-    update (shepherd: Shepherd, water: WaterSource[], grass: GrassPatch[]): SheepEvent {
+    update (shepherd: Shepherd, water: WaterSource[], grass: GrassPatch[], huddle = false): SheepEvent {
         const now = this.scene.time.now;
         const dist = Math.hypot(shepherd.sprite.x - this.sprite.x, shepherd.sprite.y - this.sprite.y);
 
@@ -207,8 +208,9 @@ export class Sheep {
         }
 
         const angle = (this.followSlot / 4) * Math.PI * 2;
-        const targetX = shepherd.sprite.x + Math.cos(angle) * FOLLOW_DISTANCE;
-        const targetY = shepherd.sprite.y + Math.sin(angle) * FOLLOW_DISTANCE;
+        const spacing = huddle ? NIGHT_FOLLOW_DISTANCE : FOLLOW_DISTANCE;
+        const targetX = shepherd.sprite.x + Math.cos(angle) * spacing;
+        const targetY = shepherd.sprite.y + Math.sin(angle) * spacing;
         const followDist = Math.hypot(targetX - this.sprite.x, targetY - this.sprite.y);
 
         if (followDist > 18) {

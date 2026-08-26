@@ -248,8 +248,8 @@ export class WatercolorWorld {
             x: spec.x,
             y: spec.y,
             radius: Math.max(spec.rx, spec.ry),
-            width: spec.rx * 2.3,
-            height: spec.ry * 2.3,
+            width: spec.rx * 3.45,
+            height: spec.ry * 3.45,
             depth: spec.creation ? CREATION_DEPTH : RAIN_DEPTH,
             spec,
             painter,
@@ -401,13 +401,16 @@ function createBlobPainter (
     rng: () => number,
     existing?: HTMLCanvasElement
 ): { canvas: HTMLCanvasElement; step: () => boolean } {
-    const size = 256;
-    const canvas = existing ?? document.createElement('canvas');
+    // Match canvas aspect to the blob so tall/wide washes aren't clipped into
+    // a hard horizontal (or vertical) edge by a square texture.
+    const aspect = clamp(spec.ry / Math.max(spec.rx, 1), 0.25, 4);
+    const base = 512;
+    const canvasW = aspect >= 1 ? base : Math.round(base / aspect);
+    const canvasH = aspect >= 1 ? Math.round(base * aspect) : base;
 
-    if (!existing) {
-        canvas.width = size;
-        canvas.height = size;
-    }
+    const canvas = existing ?? document.createElement('canvas');
+    canvas.width = canvasW;
+    canvas.height = canvasH;
 
     const ctx = canvas.getContext('2d');
 
@@ -415,16 +418,15 @@ function createBlobPainter (
         throw new Error('Could not create watercolor blob canvas');
     }
 
-    if (existing) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-    }
+    ctx.clearRect(0, 0, canvasW, canvasH);
 
-    const aspect = spec.ry / Math.max(spec.rx, 1);
+    // Normalized circle on an aspect-matched canvas → correct ellipse in pixels,
+    // with margin left for deformPolygon wander so edges stay soft.
     const wash: Wash = {
         x: 0.5,
         y: 0.5,
-        rx: 0.38,
-        ry: 0.38 * aspect,
+        rx: 0.36,
+        ry: 0.36,
         color: spec.color,
         sides: 7 + Math.floor(rng() * 4)
     };

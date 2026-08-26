@@ -1,17 +1,25 @@
 import { Scene, GameObjects, Scenes } from 'phaser';
 import { Shepherd } from '../entities/Shepherd';
 import { Sheep } from '../entities/Sheep';
-import { findPointAwayFromAll, WORLD_HEIGHT, WORLD_WIDTH, startCenter } from '../world/constants';
+import { findPointAwayFromAll, WORLD_HEIGHT, WORLD_WIDTH, farthestCornerFrom, startCenter } from '../world/constants';
 import { GrassPatch, placePasture } from '../world/GrassPatch';
 import { WaterSource } from '../world/WaterSource';
 import { Sheepfold } from '../world/Sheepfold';
 import { Hole } from '../world/Hole';
 import { StaffPickup } from '../world/StaffPickup';
+import { BibleGem, placeBibleGems, spawnBibleGemAway } from '../world/BibleGem';
 import { watercolorWorld } from '../world/watercolorWorld';
 import { speakCue, stopSpeech } from '../ui/speech';
-import { startHowling, stopHowling } from '../audio/howl';
+import { startHowling, stopHowling, suspendHowling, syncHowling, unsuspendHowling } from '../audio/howl';
+import { isSoundOn, setSoundOn } from '../audio/soundPref';
+import { WANDERLUST_KEY, WONDERS_KEY, fadeInWorldMusic, fadeOutWorldMusic, setWorldMusicTrack, startWorldMusic, stopWorldMusic } from '../audio/worldMusic';
+import { holdSheepSounds, stopSheepSounds, tickSheepSounds } from '../audio/sheepSounds';
 import { corinthians15Line, isaiah53Line, john10Line, psalm23Comfort, psalm23Half } from '../data/scripture';
 import { LostSheepHint } from '../ui/LostSheepHint';
+import { BandageButton } from '../ui/BandageButton';
+import { SETTINGS_GEAR_KEY, SETTINGS_GEAR_SIZE, ensureSettingsGear } from '../ui/settingsGear';
+import { SOUND_ICON_SIZE, ensureSoundIcons, soundIconKey } from '../ui/soundIcon';
+import { TREASURE_CHEST_KEY, TREASURE_CHEST_SIZE, ensureTreasureChest } from '../ui/treasureChest';
 import { GameSave, StoryCheckpoint, loadSave, writeSave } from '../save/gameSave';
 
 const FLOCK_NAMES = ['Clover', 'Snowball', 'Biscuit', 'Milo'];
@@ -23,11 +31,15 @@ export class WorldScene extends Scene {
     private flock: Sheep[] = [];
     private grass: GrassPatch[] = [];
     private water: WaterSource[] = [];
-    private sheepfold!: Sheepfold;
+    private sheepfold: Sheepfold | null = null;
     private staffPickup: StaffPickup | null = null;
+    private gems: BibleGem[] = [];
+    private foundGems: string[] = [];
+    private lastCheckpoint: StoryCheckpoint | null = null;
     private nightVeil!: GameObjects.Rectangle;
     private cueText!: GameObjects.Text;
-    private bandageButton!: GameObjects.Text;
+    private soundToggle!: GameObjects.Image;
+    private bandageButton!: BandageButton;
     private lastCue = '';
     private scriptId = 0;
     private scriptPlaying = false;
@@ -61,7 +73,13 @@ export class WorldScene extends Scene {
             this.cameras.main.fadeIn(1200, 255, 255, 255);
         }
 
-        this.playWanderlust();
+        this.events.on(Scenes.Events.PAUSE, () => this.holdWorldAudio());
+        this.events.on(Scenes.Events.RESUME, () => this.releaseWorldAudio());
+        this.game.events.on('blur', this.holdWorldAudio, this);
+        this.game.events.on('hidden', this.holdWorldAudio, this);
+        this.game.events.on('focus', this.releaseWorldAudio, this);
+        this.game.events.on('visible', this.releaseWorldAudio, this);
+        this.sound.mute = !isSoundOn();
 
         const ground = watercolorWorld();
         const start = startCenter();
@@ -73,21 +91,38 @@ export class WorldScene extends Scene {
 
         this.shepherd = new Shepherd(this, start.x, start.y);
         this.shepherd.sprite.setDepth(6);
-        this.cameras.main.centerOn(start.x, start.y);
+
+        const save = loadSave();
+
+        if (save?.player) {
+            this.shepherd.placeAt(save.player.x, save.player.y);
+        }
+
+        this.cameras.main.centerOn(this.shepherd.sprite.x, this.shepherd.sprite.y);
         this.cameras.main.startFollow(this.shepherd.sprite, true, 0.12, 0.12);
 
-        const waterAt = { x: start.x + 270, y: start.y + 210 };
-        this.water = [new WaterSource(this, waterAt.x, waterAt.y)];
+        this.water = save?.water?.length
+            ? save.water.map((point) => new WaterSource(this, point.x, point.y))
+            : [new WaterSource(this, start.x + 270, start.y + 210)];
 
-        const foldAt = { x: WORLD_WIDTH - 320, y: WORLD_HEIGHT - 260 };
-        this.sheepfold = new Sheepfold(this, foldAt.x, foldAt.y);
+        if (save?.grass?.length) {
+            this.grass = save.grass.map((point) => new GrassPatch(this, point.x, point.y));
+        }
+        else {
+            const pasture = findPointAwayFromAll(
+                [
+                    { x: this.shepherd.sprite.x, y: this.shepherd.sprite.y },
+                    ...this.water
+                ],
+                700,
+                400
+            );
+            this.grass = placePasture(this, pasture);
+        }
 
-        const pasture = findPointAwayFromAll(
-            [start, waterAt, foldAt],
-            700,
-            400
-        );
-        this.grass = placePasture(this, pasture);
+        if (save?.pen) {
+            this.ensurePen(save.pen);
+        }
 
         this.cueText = this.add.text(16, 16, 'Find your sheep.', {
             fontFamily: 'Georgia, serif',
@@ -115,9 +150,9 @@ export class WorldScene extends Scene {
         this.lostHint = new LostSheepHint(this);
         this.addBandageButton();
 
-        const save = loadSave();
-
         if (save) {
+            this.foundGems = save.foundGems ?? [];
+            this.lastCheckpoint = save.checkpoint;
             this.restoreSave(save);
 
             if (!this.scriptPlaying) {
@@ -129,11 +164,28 @@ export class WorldScene extends Scene {
             this.showCue('Find your sheep.');
         }
 
+        this.gems = placeBibleGems(this, this.foundGems, {
+            x: this.shepherd.sprite.x,
+            y: this.shepherd.sprite.y
+        });
+
+        this.playWorldMusic();
+
         this.events.once(Scenes.Events.SHUTDOWN, () => {
             this.scriptId += 1;
+            this.game.events.off('blur', this.holdWorldAudio, this);
+            this.game.events.off('hidden', this.holdWorldAudio, this);
+            this.game.events.off('focus', this.releaseWorldAudio, this);
+            this.game.events.off('visible', this.releaseWorldAudio, this);
             stopSpeech();
             stopHowling();
-            this.sound.stopByKey('wanderlust');
+            stopWorldMusic(this);
+            stopSheepSounds(this);
+        });
+
+        this.input.on('pointerdown', () => {
+            this.playWorldMusic();
+            unsuspendHowling();
         });
 
         this.input.once('pointerdown', (_pointer: Phaser.Input.Pointer, currentlyOver: GameObjects.GameObject[]) => {
@@ -153,7 +205,7 @@ export class WorldScene extends Scene {
         watercolorWorld().tick(this, this.time.now);
 
         for (const sheep of this.flock) {
-            const event = sheep.update(this.shepherd, this.water, this.grass);
+            const event = sheep.update(this.shepherd, this.water, this.grass, this.nightStarted);
 
             if (event === 'found') {
                 this.onFoundSheep(sheep);
@@ -174,11 +226,13 @@ export class WorldScene extends Scene {
             }
         }
 
-        this.lostHint.update(this, this.shepherd, this.hintTarget());
+        tickSheepSounds(this, this.flock, this.shepherd.sprite);
+        this.lostHint.update(this, this.shepherd, this.hintTarget(), Boolean(this.staffPickup));
         this.updateBandageButton();
         this.maybeSpeakRighteousness();
         this.maybeHowl();
         this.maybePickupStaff();
+        this.maybeCollectGem();
         this.maybeReachPen();
     }
 
@@ -344,6 +398,10 @@ export class WorldScene extends Scene {
             return 'The flock is home.';
         }
 
+        if (this.staffPickup && !this.shepherd.hasStaff) {
+            return "I'm scared. I need my staff.";
+        }
+
         if (this.nightStarted) {
             return this.heardJohn102 ? 'You reached the pen.' : 'Guide the flock to the pen.';
         }
@@ -372,8 +430,16 @@ export class WorldScene extends Scene {
             return this.closestToShepherd(this.water);
         }
 
-        if (this.nightStarted && !this.heardJohn102) {
+        if (this.staffPickup && !this.shepherd.hasStaff) {
+            return this.staffPickup;
+        }
+
+        if (this.nightStarted && this.shepherd.hasStaff && !this.heardJohn102 && this.sheepfold) {
             return this.sheepfold;
+        }
+
+        if (this.gems.length > 0) {
+            return this.closestToShepherd(this.gems);
         }
 
         return null;
@@ -393,25 +459,6 @@ export class WorldScene extends Scene {
         }
 
         return closest;
-    }
-
-    private playWanderlust (): void {
-        const start = (): void => {
-            if (!this.sys.isActive() || this.sound.isPlaying('wanderlust')) {
-                return;
-            }
-
-            this.sound.play('wanderlust', {
-                loop: true,
-                volume: 0.4
-            });
-        };
-
-        start();
-
-        if (this.sound.locked) {
-            this.sound.once('unlocked', start);
-        }
     }
 
     private showCue (text: string, speak = true): void {
@@ -477,6 +524,7 @@ export class WorldScene extends Scene {
     }
 
     private saveProgress (checkpoint: StoryCheckpoint): void {
+        this.lastCheckpoint = checkpoint;
         const foundNames = this.flock
             .filter((sheep) => sheep.mood !== 'waiting' && sheep.mood !== 'hurt')
             .map((sheep) => sheep.name);
@@ -501,7 +549,15 @@ export class WorldScene extends Scene {
             heardJohn109: this.heardJohn109,
             heardCorinthians: this.heardCorinthians,
             whiteRobe: this.shepherd.wearsWhite,
-            hasStaff: this.shepherd.hasStaff
+            hasStaff: this.shepherd.hasStaff,
+            staff: this.shepherd.hasStaff || !this.staffPickup
+                ? null
+                : { x: this.staffPickup.x, y: this.staffPickup.y },
+            player: { x: this.shepherd.sprite.x, y: this.shepherd.sprite.y },
+            pen: this.sheepfold ? { x: this.sheepfold.x, y: this.sheepfold.y } : null,
+            water: this.water.map((source) => ({ x: source.x, y: source.y })),
+            grass: this.grass.map((patch) => ({ x: patch.x, y: patch.y })),
+            foundGems: [...this.foundGems]
         });
     }
 
@@ -561,11 +617,14 @@ export class WorldScene extends Scene {
             this.beginWalkWatch();
         }
 
-        if (save.hasStaff) {
+        if (save.hasStaff || save.checkpoint === 'found-staff') {
             this.shepherd.equipStaff(true);
         }
-        else if (this.heardPsalm4c && !this.heardCorinthians) {
-            this.placeStaff(false);
+        else if (save.staff) {
+            this.staffPickup = new StaffPickup(this, save.staff.x, save.staff.y);
+        }
+        else if ((this.heardPsalm4b || this.heardPsalm4c) && !this.heardCorinthians) {
+            this.placeStaff();
         }
 
         if (save.whiteRobe || this.heardCorinthians) {
@@ -606,44 +665,92 @@ export class WorldScene extends Scene {
         this.heardJohn109 = false;
         this.heardCorinthians = false;
         this.nightStarted = false;
+        setWorldMusicTrack(this, WANDERLUST_KEY);
+        this.sheepfold = null;
         this.staffPickup = null;
+        this.gems = [];
+        this.foundGems = [];
+        this.lastCheckpoint = null;
         this.walkFrom = null;
     }
 
     private addSettingsButton (): void {
-        const button = this.add.text(this.scale.width - 16, 16, 'Settings', {
-            fontFamily: 'Georgia, serif',
-            fontSize: '18px',
-            color: '#3d2c1e',
-            backgroundColor: '#f3ead8cc',
-            padding: { x: 10, y: 6 }
-        }).setOrigin(1, 0).setScrollFactor(0).setDepth(21).setInteractive({ useHandCursor: true });
+        ensureSettingsGear(this);
+        ensureSoundIcons(this);
+        ensureTreasureChest(this);
 
-        button.setData('ui', true);
-        button.on('pointerover', () => button.setColor('#5c4634'));
-        button.on('pointerout', () => button.setColor('#3d2c1e'));
-        button.on('pointerdown', (_pointer: unknown, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
+        const settings = this.add.image(this.scale.width - 16, 16, SETTINGS_GEAR_KEY)
+            .setOrigin(1, 0)
+            .setDisplaySize(SETTINGS_GEAR_SIZE, SETTINGS_GEAR_SIZE)
+            .setScrollFactor(0)
+            .setDepth(21)
+            .setInteractive({ useHandCursor: true });
+
+        settings.setData('ui', true);
+        settings.on('pointerover', () => settings.setTint(0xc4a882));
+        settings.on('pointerout', () => settings.clearTint());
+        settings.on('pointerdown', (_pointer: unknown, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
             event.stopPropagation();
             this.openSettings();
         });
+
+        this.soundToggle = this.add.image(
+            settings.x - settings.displayWidth - 12,
+            16,
+            soundIconKey(isSoundOn())
+        )
+            .setOrigin(1, 0)
+            .setDisplaySize(SOUND_ICON_SIZE, SOUND_ICON_SIZE)
+            .setScrollFactor(0)
+            .setDepth(21)
+            .setInteractive({ useHandCursor: true });
+
+        this.soundToggle.setData('ui', true);
+        this.soundToggle.on('pointerover', () => this.soundToggle.setTint(0xc4a882));
+        this.soundToggle.on('pointerout', () => this.soundToggle.clearTint());
+        this.soundToggle.on('pointerdown', (_pointer: unknown, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
+            event.stopPropagation();
+            this.toggleSound();
+        });
+
+        const chest = this.add.image(
+            this.soundToggle.x - this.soundToggle.displayWidth - 12,
+            16,
+            TREASURE_CHEST_KEY
+        )
+            .setOrigin(1, 0)
+            .setDisplaySize(TREASURE_CHEST_SIZE, TREASURE_CHEST_SIZE)
+            .setScrollFactor(0)
+            .setDepth(21)
+            .setInteractive({ useHandCursor: true });
+
+        chest.setData('ui', true);
+        chest.on('pointerover', () => chest.setTint(0xc4a882));
+        chest.on('pointerout', () => chest.clearTint());
+        chest.on('pointerdown', (_pointer: unknown, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
+            event.stopPropagation();
+            this.openTreasure();
+        });
+    }
+
+    private toggleSound (): void {
+        setSoundOn(!isSoundOn());
+        this.sound.mute = !isSoundOn();
+        this.soundToggle.setTexture(soundIconKey(isSoundOn()));
+        this.soundToggle.clearTint();
+
+        if (isSoundOn()) {
+            this.playWorldMusic();
+        }
+        else {
+            stopSpeech();
+        }
+
+        syncHowling();
     }
 
     private addBandageButton (): void {
-        this.bandageButton = this.add.text(16, 56, 'Bandage', {
-            fontFamily: 'Georgia, serif',
-            fontSize: '18px',
-            color: '#3d2c1e',
-            backgroundColor: '#f3ead8cc',
-            padding: { x: 10, y: 6 }
-        }).setScrollFactor(0).setDepth(21).setInteractive({ useHandCursor: true }).setVisible(false);
-
-        this.bandageButton.setData('ui', true);
-        this.bandageButton.on('pointerover', () => this.bandageButton.setColor('#5c4634'));
-        this.bandageButton.on('pointerout', () => this.bandageButton.setColor('#3d2c1e'));
-        this.bandageButton.on('pointerdown', (_pointer: unknown, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
-            event.stopPropagation();
-            this.tryBandage();
-        });
+        this.bandageButton = new BandageButton(this, () => this.tryBandage());
     }
 
     private updateBandageButton (): void {
@@ -679,14 +786,53 @@ export class WorldScene extends Scene {
         });
     }
 
+    private holdWorldAudio (): void {
+        suspendHowling();
+        holdSheepSounds(this);
+    }
+
+    private releaseWorldAudio (): void {
+        if (!this.sys.isActive() || this.sys.isPaused()) {
+            return;
+        }
+
+        this.playWorldMusic();
+        unsuspendHowling();
+    }
+
     private openSettings (): void {
-        if (this.scene.isActive('SettingsScene')) {
+        if (this.scene.isActive('SettingsScene') || this.scene.isActive('TreasureScene')) {
             return;
         }
 
         stopSpeech();
         this.scene.pause();
         this.scene.launch('SettingsScene');
+    }
+
+    private openTreasure (): void {
+        if (this.scene.isActive('TreasureScene') || this.scene.isActive('SettingsScene')) {
+            return;
+        }
+
+        stopSpeech();
+        this.scene.pause();
+        this.scene.launch('TreasureScene', {
+            foundGems: [...this.foundGems],
+            heard: {
+                heardPsalm1: this.heardPsalm1,
+                heardPsalm2: this.heardPsalm2,
+                heardPsalm2b: this.heardPsalm2b,
+                heardPsalm3: this.heardPsalm3,
+                heardPsalm3b: this.heardPsalm3b,
+                heardPsalm4a: this.heardPsalm4a,
+                heardPsalm4b: this.heardPsalm4b,
+                heardPsalm4c: this.heardPsalm4c,
+                heardJohn102: this.heardJohn102,
+                heardJohn109: this.heardJohn109,
+                heardCorinthians: this.heardCorinthians
+            }
+        });
     }
 
     private beginWalkWatch (): void {
@@ -745,30 +891,42 @@ export class WorldScene extends Scene {
         }
 
         this.walkFrom = null;
-        startHowling();
         this.playLines([psalm23Half(4, 'b')], () => {
-            stopHowling();
-            this.placeStaff(true);
+            this.placeStaff();
+            this.playLines([
+                "I'm scared.",
+                'I need my staff.'
+            ]);
         });
     }
 
-    private placeStaff (announce: boolean): void {
+    private ensurePen (at?: { x: number; y: number } | null): Sheepfold {
+        if (this.sheepfold) {
+            return this.sheepfold;
+        }
+
+        const spot = at ?? farthestCornerFrom({
+            x: this.shepherd.sprite.x,
+            y: this.shepherd.sprite.y
+        });
+        this.sheepfold = new Sheepfold(this, spot.x, spot.y);
+        return this.sheepfold;
+    }
+
+    private fold (): Sheepfold {
+        return this.ensurePen();
+    }
+
+    private placeStaff (): void {
         if (this.staffPickup || this.shepherd.hasStaff) {
             return;
         }
 
         const from = this.shepherd.sprite;
-        const to = this.sheepfold;
-        const dx = to.x - from.x;
-        const dy = to.y - from.y;
-        const len = Math.hypot(dx, dy) || 1;
-        const step = Math.min(240, len * 0.4);
+        const to = this.ensurePen();
 
-        this.staffPickup = new StaffPickup(this, from.x + (dx / len) * step, from.y + (dy / len) * step);
-
-        if (announce) {
-            this.playLines([psalm23Comfort()]);
-        }
+        this.staffPickup = new StaffPickup(this, (from.x + to.x) / 2, (from.y + to.y) / 2);
+        this.saveProgress(this.lastCheckpoint ?? 'psalm-23-4b');
     }
 
     private maybePickupStaff (): void {
@@ -783,29 +941,65 @@ export class WorldScene extends Scene {
         this.staffPickup.destroy();
         this.staffPickup = null;
         this.shepherd.equipStaff(true);
-        this.saveProgress('psalm-23-4c');
+        this.saveProgress('found-staff');
+        this.playLines([psalm23Comfort()]);
+    }
+
+    private maybeCollectGem (): void {
+        if (this.scriptPlaying || this.gems.length === 0) {
+            return;
+        }
+
+        const gem = this.gems.find((item) => item.isNear(this.shepherd.sprite.x, this.shepherd.sprite.y));
+
+        if (!gem) {
+            return;
+        }
+
+        this.foundGems.push(gem.id);
+        this.gems = this.gems.filter((item) => item !== gem);
+        gem.destroy();
+
+        const next = spawnBibleGemAway(
+            this,
+            this.foundGems,
+            this.gems,
+            { x: this.shepherd.sprite.x, y: this.shepherd.sprite.y }
+        );
+
+        if (next) {
+            this.gems.push(next);
+        }
+
+        if (this.lastCheckpoint) {
+            this.saveProgress(this.lastCheckpoint);
+        }
+
+        this.playLines(['You found a Bible gem.', gem.line()]);
     }
 
     private maybeReachPen (): void {
-        if (this.heardJohn102 || this.heardJohn109 || !this.nightStarted || this.scriptPlaying) {
+        if (this.heardJohn102 || this.heardJohn109 || !this.nightStarted || this.scriptPlaying || !this.shepherd.hasStaff) {
             return;
         }
 
-        if (!this.sheepfold.isNear(this.shepherd.sprite.x, this.shepherd.sprite.y)) {
+        if (!this.sheepfold || !this.sheepfold.isNear(this.shepherd.sprite.x, this.shepherd.sprite.y)) {
             return;
         }
 
+        stopHowling();
         this.playLines([john10Line(2)], () => {
             this.closeFold();
         });
     }
 
     private closeFold (): void {
+        const fold = this.ensurePen();
         this.flock.forEach((sheep, slot) => {
-            const rest = this.sheepfold.restSpot(slot);
+            const rest = fold.restSpot(slot);
             sheep.enterPen(rest.x, rest.y);
         });
-        this.shepherd.lieDown(this.sheepfold.gateSpot().x, this.sheepfold.gateSpot().y);
+        this.shepherd.lieDown(fold.gateSpot().x, fold.gateSpot().y);
         this.playLines([john10Line(9)], () => {
             this.beginMystery();
         });
@@ -813,18 +1007,18 @@ export class WorldScene extends Scene {
 
     private settleFold (): void {
         this.flock.forEach((sheep, slot) => {
-            const rest = this.sheepfold.restSpot(slot);
+            const rest = this.fold().restSpot(slot);
             sheep.settleInPen(rest.x, rest.y);
         });
-        this.shepherd.lieDown(this.sheepfold.gateSpot().x, this.sheepfold.gateSpot().y);
+        this.shepherd.lieDown(this.fold().gateSpot().x, this.fold().gateSpot().y);
     }
 
     private placeAtFoldAwake (): void {
-        const gate = this.sheepfold.gateSpot();
-        this.shepherd.sprite.setPosition(gate.x, gate.y);
+        const gate = this.fold().gateSpot();
+        this.shepherd.placeAt(gate.x, gate.y);
         this.shepherd.wake();
         this.flock.forEach((sheep, slot) => {
-            const rest = this.sheepfold.restSpot(slot);
+            const rest = this.fold().restSpot(slot);
             sheep.sprite.setPosition(rest.x, rest.y);
             sheep.leavePen();
         });
@@ -832,6 +1026,8 @@ export class WorldScene extends Scene {
         this.nightVeil.setAlpha(0);
         this.sleepVeil.setAlpha(0);
         this.styleCueForDay();
+        stopHowling();
+        this.playWorldMusic();
     }
 
     private beginMystery (): void {
@@ -865,6 +1061,8 @@ export class WorldScene extends Scene {
         this.nightStarted = false;
         this.shepherd.wake();
         this.flock.forEach((sheep) => sheep.leavePen());
+        setWorldMusicTrack(this, WONDERS_KEY);
+        fadeInWorldMusic(this, 1800);
         this.tweens.add({
             targets: [this.sleepVeil, this.nightVeil],
             alpha: 0,
@@ -890,6 +1088,12 @@ export class WorldScene extends Scene {
 
     private applyNight (animate: boolean): void {
         this.nightStarted = true;
+        this.ensurePen();
+        fadeOutWorldMusic(this, animate ? 2800 : 0);
+
+        if (!this.heardJohn102) {
+            startHowling(this);
+        }
 
         if (animate) {
             this.tweens.add({
@@ -904,13 +1108,23 @@ export class WorldScene extends Scene {
         this.nightVeil.setAlpha(0.55);
     }
 
+    private playWorldMusic (): void {
+        if (this.nightStarted) {
+            return;
+        }
+
+        setWorldMusicTrack(this, this.heardCorinthians ? WONDERS_KEY : WANDERLUST_KEY);
+        startWorldMusic(this);
+    }
+
     private spawnSheep (name: string, slot: number): void {
         const placed = [
             { x: this.shepherd.sprite.x, y: this.shepherd.sprite.y },
             ...this.flock.map((sheep) => ({ x: sheep.sprite.x, y: sheep.sprite.y })),
             ...this.grass,
             ...this.water,
-            this.sheepfold
+            ...this.gems,
+            ...(this.sheepfold ? [this.sheepfold] : [])
         ];
         const spawn = findPointAwayFromAll(placed, 1400, 1200);
 

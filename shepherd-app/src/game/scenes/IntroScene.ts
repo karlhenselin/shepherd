@@ -1,5 +1,6 @@
 import { GameObjects, Scene } from 'phaser';
 import { GENESIS_1_1 } from '../data/scripture';
+import { isSoundOn } from '../audio/soundPref';
 import { speakCue, stopSpeech } from '../ui/speech';
 import { startCenter } from '../world/constants';
 import { watercolorWorld } from '../world/watercolorWorld';
@@ -18,6 +19,7 @@ export class IntroScene extends Scene {
     }
 
     create (): void {
+        this.sound.mute = !isSoundOn();
         this.cameras.main.setBackgroundColor(0x000000);
 
         const { width, height } = this.scale;

@@ -1,6 +1,8 @@
 const SAVE_KEY = 'shepherd-save';
 
-export type StoryCheckpoint = 'psalm-23-1' | 'psalm-23-2' | 'isaiah-53-6' | 'psalm-23-3' | 'psalm-23-3b' | 'psalm-23-4a' | 'psalm-23-4b' | 'psalm-23-4c' | 'john-10-2' | 'john-10-9' | '1-cor-15-51' | 'hurt-sheep';
+export type StoryCheckpoint = 'psalm-23-1' | 'psalm-23-2' | 'isaiah-53-6' | 'psalm-23-3' | 'psalm-23-3b' | 'psalm-23-4a' | 'psalm-23-4b' | 'psalm-23-4c' | 'found-staff' | 'john-10-2' | 'john-10-9' | '1-cor-15-51' | 'hurt-sheep';
+
+export type SavedPoint = { x: number; y: number };
 
 export type GameSave = {
     version: 1;
@@ -22,6 +24,12 @@ export type GameSave = {
     heardCorinthians?: boolean;
     whiteRobe?: boolean;
     hasStaff?: boolean;
+    staff?: SavedPoint | null;
+    player?: SavedPoint;
+    pen?: SavedPoint | null;
+    water?: SavedPoint[];
+    grass?: SavedPoint[];
+    foundGems?: string[];
 };
 
 export function loadSave (): GameSave | null {

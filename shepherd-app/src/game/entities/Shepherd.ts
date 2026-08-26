@@ -61,6 +61,11 @@ export class Shepherd {
         this.applyTexture();
     }
 
+    placeAt (x: number, y: number): void {
+        this.sprite.setPosition(x, y);
+        this.placeShadow();
+    }
+
     lieDown (x: number, y: number): void {
         this.lyingDown = true;
         this.target = null;
@@ -146,10 +151,6 @@ export class Shepherd {
 function ensureShepherdTextures (scene: Scene): void {
     const keys = ['shepherd', 'shepherd-staff', 'shepherd-white', 'shepherd-staff-white'];
 
-    if (keys.every((key) => scene.textures.exists(key))) {
-        return;
-    }
-
     for (const key of keys) {
         if (scene.textures.exists(key)) {
             scene.textures.remove(key);
@@ -173,13 +174,7 @@ function ensureShepherdTextures (scene: Scene): void {
 
 function drawShepherd (g: GameObjects.Graphics, withStaff: boolean, white: boolean): void {
     if (withStaff) {
-        g.fillStyle(white ? 0xd8c4a0 : 0x7a5c3e, 1);
-        g.fillRect(31, 14, 3, 30);
-        g.fillCircle(30, 13, 3.5);
-        g.fillCircle(26, 11, 3.5);
-        g.fillCircle(23, 14, 3);
-        g.fillStyle(white ? 0xf4ead8 : 0xb08960, 1);
-        g.fillRect(32, 18, 1, 18);
+        drawCrook(g, 31, 13, 30, white ? 0xd8c4a0 : 0x7a5c3e, white ? 0xf4ead8 : 0xb08960);
     }
 
     g.fillStyle(white ? 0xe8e4dc : 0x4a3728, 1);
@@ -199,6 +194,35 @@ function drawShepherd (g: GameObjects.Graphics, withStaff: boolean, white: boole
     g.fillCircle(18, 13, 3.5);
     g.fillCircle(26, 13, 3.5);
     g.fillCircle(22, 11, 4);
+}
+
+function drawCrook (
+    g: GameObjects.Graphics,
+    shaftX: number,
+    top: number,
+    length: number,
+    wood: number,
+    light: number
+): void {
+    const thick = 2.5;
+    const hookR = 6.5;
+    const mid = shaftX + thick / 2;
+    const cx = mid + hookR;
+    const cy = top;
+    const start = Math.PI;
+    const end = Math.PI * 2 + 0.95;
+    const steps = 20;
+
+    g.fillStyle(wood, 1);
+    g.fillRect(shaftX, top, thick, length);
+
+    for (let i = 0; i <= steps; i++) {
+        const a = start + (end - start) * (i / steps);
+        g.fillCircle(cx + Math.cos(a) * hookR, cy + Math.sin(a) * hookR, thick / 2);
+    }
+
+    g.fillStyle(light, 1);
+    g.fillRect(shaftX + 1, top + 5, 1, length - 10);
 }
 
 function ensureShepherdShadow (scene: Scene): void {
