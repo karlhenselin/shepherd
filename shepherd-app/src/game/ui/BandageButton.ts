@@ -7,7 +7,6 @@ const DISPLAY = 240;
 
 export class BandageButton {
     private readonly icon: GameObjects.Image;
-    private readonly label: GameObjects.Text;
     private readonly pulse: Tweens.Tween;
     private readonly baseScale: number;
     private shown: boolean | null = null;
@@ -18,7 +17,7 @@ export class BandageButton {
         const cx = scene.scale.width / 2;
         const cy = scene.scale.height / 2 + 8;
 
-        this.icon = scene.add.image(cx, cy - 18, TEXTURE_KEY);
+        this.icon = scene.add.image(cx, cy, TEXTURE_KEY);
         this.icon.setDisplaySize(DISPLAY, DISPLAY);
         this.icon.setScrollFactor(0);
         this.icon.setDepth(22);
@@ -31,16 +30,6 @@ export class BandageButton {
 
         this.baseScale = this.icon.scaleX;
 
-        this.label = scene.add.text(cx, cy + DISPLAY / 2 - 4, 'Bandage', {
-            fontFamily: 'Georgia, serif',
-            fontSize: '36px',
-            color: '#3d2c1e',
-            backgroundColor: '#f3ead8ee',
-            padding: { x: 18, y: 8 }
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(22).setInteractive({ useHandCursor: true });
-
-        this.label.setData('ui', true);
-
         const press = (
             _pointer: unknown,
             _x: number,
@@ -52,11 +41,8 @@ export class BandageButton {
         };
 
         this.icon.on('pointerdown', press);
-        this.label.on('pointerdown', press);
         this.icon.on('pointerover', () => this.icon.setTint(0xffe4d4));
         this.icon.on('pointerout', () => this.icon.clearTint());
-        this.label.on('pointerover', () => this.label.setColor('#5c4634'));
-        this.label.on('pointerout', () => this.label.setColor('#3d2c1e'));
 
         this.pulse = scene.tweens.add({
             targets: this.icon,
@@ -79,7 +65,6 @@ export class BandageButton {
 
         this.shown = visible;
         this.icon.setVisible(visible);
-        this.label.setVisible(visible);
 
         if (visible) {
             this.pulse.resume();
@@ -89,7 +74,6 @@ export class BandageButton {
         this.pulse.pause();
         this.icon.setScale(this.baseScale);
         this.icon.clearTint();
-        this.label.setColor('#3d2c1e');
     }
 }
 

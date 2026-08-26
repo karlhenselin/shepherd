@@ -5,6 +5,9 @@ const ARRIVE_DISTANCE = 8;
 const SHEPHERD_W = 48;
 const SHEPHERD_H = 48;
 const SHADOW_OFFSET = 20;
+const PET_MS = 1800;
+const PET_KNEEL_ANGLE = 22;
+const PET_SCALE_Y = 0.82;
 
 export class Shepherd {
     readonly sprite: GameObjects.Sprite;
@@ -15,6 +18,13 @@ export class Shepherd {
     private staffEquipped = false;
     private lyingDown = false;
     private whiteRobe = false;
+    private pettingUntil = 0;
+    /** Scripted walk / rescue — blocks player steer until clearGuidance(). */
+    private guided = false;
+    private arriveCallback: (() => void) | null = null;
+    /** Unit vector of last non-zero velocity (flock trails opposite this). */
+    private moveDirX = 1;
+    private moveDirY = 0;
 
     constructor (scene: Scene, x: number, y: number) {
         ensureShepherdTextures(scene);
@@ -39,6 +49,10 @@ export class Shepherd {
                 return;
             }
 
+            if (this.isPetting || this.lyingDown || this.guided) {
+                return;
+            }
+
             this.target = new PMath.Vector2(pointer.worldX, pointer.worldY);
         });
     }
@@ -49,6 +63,23 @@ export class Shepherd {
 
     get wearsWhite (): boolean {
         return this.whiteRobe;
+    }
+
+    get isPetting (): boolean {
+        return this.sprite.scene.time.now < this.pettingUntil;
+    }
+
+    get isLyingDown (): boolean {
+        return this.lyingDown;
+    }
+
+    get isGuided (): boolean {
+        return this.guided;
+    }
+
+    /** Last travel direction as a unit vector (stable while standing still). */
+    get moveHeading (): { x: number; y: number } {
+        return { x: this.moveDirX, y: this.moveDirY };
     }
 
     equipStaff (equipped = true): void {
@@ -66,11 +97,53 @@ export class Shepherd {
         this.placeShadow();
     }
 
+    /**
+     * Walk to a point under script control (e.g. hole rescue).
+     * Player input stays locked until clearGuidance().
+     */
+    guideTo (x: number, y: number, onArrive: () => void): void {
+        if (this.lyingDown) {
+            return;
+        }
+
+        this.guided = true;
+        this.arriveCallback = onArrive;
+        this.target = new PMath.Vector2(x, y);
+        this.body.setVelocity(0, 0);
+    }
+
+    clearGuidance (): void {
+        this.guided = false;
+        this.arriveCallback = null;
+        this.target = null;
+        this.body.setVelocity(0, 0);
+    }
+
+    /** Kneel toward a sheep for a short cozy pet. */
+    beginPetting (sheepX: number, _sheepY: number, durationMs = PET_MS): void {
+        if (this.lyingDown) {
+            return;
+        }
+
+        this.pettingUntil = this.sprite.scene.time.now + durationMs;
+        this.target = null;
+        this.arriveCallback = null;
+        this.body.setVelocity(0, 0);
+        this.sprite.setFlipX(sheepX < this.sprite.x);
+        this.sprite.setAngle(this.sprite.flipX ? -PET_KNEEL_ANGLE : PET_KNEEL_ANGLE);
+        this.sprite.setScale(1.04, PET_SCALE_Y);
+        this.placeShadow();
+    }
+
     lieDown (x: number, y: number): void {
         this.lyingDown = true;
+        this.guided = false;
+        this.arriveCallback = null;
+        this.pettingUntil = 0;
         this.target = null;
         this.sprite.setPosition(x, y);
         this.sprite.setAngle(90);
+        this.sprite.setScale(1, 1);
         this.body.setVelocity(0, 0);
         this.body.setImmovable(true);
         this.placeShadow();
@@ -78,8 +151,12 @@ export class Shepherd {
 
     wake (): void {
         this.lyingDown = false;
+        this.guided = false;
+        this.arriveCallback = null;
+        this.pettingUntil = 0;
         this.target = null;
         this.sprite.setAngle(0);
+        this.sprite.setScale(1, 1);
         this.body.setImmovable(false);
         this.body.setVelocity(0, 0);
         this.placeShadow();
@@ -98,20 +175,33 @@ export class Shepherd {
             this.placeShadow();
             return;
         }
-        const left = this.keys.A?.isDown ? -1 : 0;
-        const right = this.keys.D?.isDown ? 1 : 0;
-        const up = this.keys.W?.isDown ? -1 : 0;
-        const down = this.keys.S?.isDown ? 1 : 0;
-        const vx = left + right;
-        const vy = up + down;
 
-        if (vx !== 0 || vy !== 0) {
-            this.target = null;
-            this.body.setVelocity(vx * SPEED, vy * SPEED);
-            this.body.velocity.normalize().scale(SPEED);
-            this.faceVelocity();
+        if (this.isPetting) {
+            this.body.setVelocity(0, 0);
             this.placeShadow();
             return;
+        }
+
+        if (this.pettingUntil > 0) {
+            this.endPetting();
+        }
+
+        if (!this.guided) {
+            const left = this.keys.A?.isDown ? -1 : 0;
+            const right = this.keys.D?.isDown ? 1 : 0;
+            const up = this.keys.W?.isDown ? -1 : 0;
+            const down = this.keys.S?.isDown ? 1 : 0;
+            const vx = left + right;
+            const vy = up + down;
+
+            if (vx !== 0 || vy !== 0) {
+                this.target = null;
+                this.body.setVelocity(vx * SPEED, vy * SPEED);
+                this.body.velocity.normalize().scale(SPEED);
+                this.faceVelocity();
+                this.placeShadow();
+                return;
+            }
         }
 
         if (this.target) {
@@ -122,6 +212,9 @@ export class Shepherd {
                 this.target = null;
                 this.body.setVelocity(0, 0);
                 this.placeShadow();
+                const arrived = this.arriveCallback;
+                this.arriveCallback = null;
+                arrived?.();
                 return;
             }
 
@@ -136,9 +229,25 @@ export class Shepherd {
         this.placeShadow();
     }
 
+    private endPetting (): void {
+        this.pettingUntil = 0;
+        this.sprite.setAngle(0);
+        this.sprite.setScale(1, 1);
+        this.placeShadow();
+    }
+
     private faceVelocity (): void {
-        if (Math.abs(this.body.velocity.x) > 8) {
-            this.sprite.setFlipX(this.body.velocity.x < 0);
+        const vx = this.body.velocity.x;
+        const vy = this.body.velocity.y;
+        const speed = Math.hypot(vx, vy);
+
+        if (speed > 8) {
+            this.moveDirX = vx / speed;
+            this.moveDirY = vy / speed;
+        }
+
+        if (Math.abs(vx) > 8) {
+            this.sprite.setFlipX(vx < 0);
         }
     }
 

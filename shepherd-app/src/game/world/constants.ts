@@ -5,6 +5,13 @@ export const REGION_ROWS = 7;
 export const START_COL = 3;
 export const START_ROW = 3;
 
+/** Green pasture: neighboring region NW of start (hungry, first in the Psalm 23 loop). */
+export const PASTURE_COL = 2;
+export const PASTURE_ROW = 2;
+/** Quiet water: different section E-S of start (thirsty after pasture). Not a map corner (sheepfold). */
+export const WATER_COL = 5;
+export const WATER_ROW = 4;
+
 export const WORLD_WIDTH = REGION_COLS * REGION_WIDTH;
 export const WORLD_HEIGHT = REGION_ROWS * REGION_HEIGHT;
 

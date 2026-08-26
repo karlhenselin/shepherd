@@ -1,6 +1,6 @@
 const SAVE_KEY = 'shepherd-save';
 
-export type StoryCheckpoint = 'psalm-23-1' | 'psalm-23-2' | 'isaiah-53-6' | 'psalm-23-3' | 'psalm-23-3b' | 'psalm-23-4a' | 'psalm-23-4b' | 'psalm-23-4c' | 'found-staff' | 'john-10-2' | 'john-10-9' | '1-cor-15-51' | 'hurt-sheep';
+export type StoryCheckpoint = 'psalm-23-1' | 'psalm-23-2' | 'isaiah-53-6' | 'psalm-23-3' | 'psalm-23-3b' | 'psalm-23-4a' | 'psalm-23-4b' | 'psalm-23-4c' | 'found-staff' | 'john-10-2' | 'john-10-9' | '1-cor-15-51' | 'hurt-sheep' | 'found-sheep';
 
 export type SavedPoint = { x: number; y: number };
 

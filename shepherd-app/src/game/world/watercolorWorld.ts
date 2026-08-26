@@ -12,10 +12,12 @@ const LAYERS = 8;
 const STEP_MS = 80;
 const CREATION_DEPTH = 0;
 const RAIN_DEPTH = 1;
-const CELL = 128;
+const CELL = 283;
 const VIEW_PAD = 240;
 const MAX_PENDING = 8;
 const FALL_PX = 210;
+const INTRO_BLOB_SIZE = 4.485;
+const WORLD_BLOB_SIZE = INTRO_BLOB_SIZE * 2;
 
 type HeavenWash = Wash & { sky?: string };
 
@@ -243,13 +245,14 @@ export class WatercolorWorld {
             throw new Error(`Could not create watercolor blob ${key}`);
         }
 
+        const size = spec.creation ? INTRO_BLOB_SIZE : WORLD_BLOB_SIZE;
         const blob: PaintBlob = {
             key,
             x: spec.x,
             y: spec.y,
             radius: Math.max(spec.rx, spec.ry),
-            width: spec.rx * 3.45,
-            height: spec.ry * 3.45,
+            width: spec.rx * size,
+            height: spec.ry * size,
             depth: spec.creation ? CREATION_DEPTH : RAIN_DEPTH,
             spec,
             painter,

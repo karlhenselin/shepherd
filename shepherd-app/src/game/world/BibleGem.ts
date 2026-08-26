@@ -1,12 +1,19 @@
 import { GameObjects, Scene } from 'phaser';
 import { BIBLE_GEMS, BibleGemId, bibleGemLine } from '../data/scripture';
 import {
+    PASTURE_COL,
+    PASTURE_ROW,
     REGION_COLS,
     REGION_HEIGHT,
     REGION_ROWS,
     REGION_WIDTH,
+    START_COL,
+    START_ROW,
+    WATER_COL,
+    WATER_ROW,
     regionCenter,
-    startCenter
+    startCenter,
+    worldToRegion
 } from './constants';
 import { mulberry32 } from './watercolorPaint';
 
@@ -16,9 +23,13 @@ const GLINT_KEY = 'bible-gem-glint';
 const SIZE = 64;
 const DISPLAY = 31;
 /** How many collectible gems sit in the world at once. */
-export const WORLD_GEM_LIMIT = 10;
-const MIN_FROM_PLAYER = REGION_WIDTH * 1.75;
-const MIN_FROM_GEMS = REGION_WIDTH * 1.35;
+export const WORLD_GEM_LIMIT = 20;
+/** Prefer at least ~one region away from the shepherd when placing. */
+const MIN_FROM_PLAYER = REGION_WIDTH * 0.9;
+/** Soft floor so replacements do not land on top of an existing gem. */
+const MIN_FROM_GEMS = REGION_WIDTH * 0.85;
+
+type RegionCell = { col: number; row: number };
 
 export class BibleGem {
     readonly id: BibleGemId;
@@ -89,10 +100,13 @@ export function placeBibleGems (
 ): BibleGem[] {
     const gems: BibleGem[] = [];
     const pool = remainingGemIds(collected, []);
+    const count = Math.min(WORLD_GEM_LIMIT, pool.length);
+    const cells = pickSpreadRegions(count, collected.length);
 
-    for (let i = 0; i < Math.min(WORLD_GEM_LIMIT, pool.length); i++) {
+    for (let i = 0; i < count; i++) {
         const id = pool[i];
-        const at = findGemSpot(awayFrom, gems, i);
+        const cell = cells[i] ?? fallbackCell(awayFrom, gems);
+        const at = spotInRegion(cell, awayFrom, gems, i);
         gems.push(new BibleGem(scene, id, at.x, at.y));
     }
 
@@ -117,72 +131,197 @@ export function spawnBibleGemAway (
         return null;
     }
 
-    const at = findGemSpot(awayFrom, present, present.length + collected.length);
+    const used = occupiedRegions(present);
+    const cell = nextSpreadRegion(awayFrom, present, used, present.length + collected.length);
+    const at = spotInRegion(cell, awayFrom, present, present.length + collected.length);
 
     return new BibleGem(scene, id, at.x, at.y);
 }
 
-function findGemSpot (
-    player: { x: number; y: number },
-    others: { x: number; y: number }[],
-    salt: number
-): { x: number; y: number } {
-    const tries = [
-        { fromPlayer: MIN_FROM_PLAYER, fromGems: MIN_FROM_GEMS },
-        { fromPlayer: REGION_WIDTH * 1.2, fromGems: REGION_HEIGHT },
-        { fromPlayer: REGION_WIDTH, fromGems: REGION_HEIGHT * 0.7 }
-    ];
+/**
+ * Farthest-point sample of eligible 7×7 cells so gems cover the whole map
+ * instead of clustering near corners or the start region.
+ */
+function pickSpreadRegions (count: number, salt: number): RegionCell[] {
+    const free = eligibleRegions();
 
-    for (const need of tries) {
-        const at = pickGemRegion(player, others, salt, need.fromPlayer, need.fromGems);
-
-        if (at) {
-            return at;
-        }
+    if (count <= 0 || free.length === 0) {
+        return [];
     }
 
-    return regionCenter(0, 0);
-}
+    const rng = mulberry32((0xc0ffee ^ (salt * 2654435761)) >>> 0);
+    const picked: RegionCell[] = [];
+    const first = free[Math.floor(rng() * free.length)];
+    picked.push(first);
 
-function pickGemRegion (
-    player: { x: number; y: number },
-    others: { x: number; y: number }[],
-    salt: number,
-    minFromPlayer: number,
-    minFromGems: number
-): { x: number; y: number } | null {
-    let best: { x: number; y: number } | null = null;
-    let bestScore = -1;
+    while (picked.length < Math.min(count, free.length)) {
+        let best: RegionCell | null = null;
+        let bestScore = -1;
 
-    for (let row = 0; row < REGION_ROWS; row++) {
-        for (let col = 0; col < REGION_COLS; col++) {
-            const at = jitteredRegion(col, row, salt);
-            const fromPlayer = Math.hypot(at.x - player.x, at.y - player.y);
-
-            if (fromPlayer < minFromPlayer) {
+        for (const cell of free) {
+            if (picked.some((p) => p.col === cell.col && p.row === cell.row)) {
                 continue;
             }
 
-            let fromGems = Number.POSITIVE_INFINITY;
+            let nearest = Number.POSITIVE_INFINITY;
 
-            for (const other of others) {
-                fromGems = Math.min(fromGems, Math.hypot(at.x - other.x, at.y - other.y));
+            for (const p of picked) {
+                nearest = Math.min(nearest, regionDist(cell, p));
             }
 
-            if (others.length > 0 && fromGems < minFromGems) {
-                continue;
-            }
-
-            const score = others.length === 0 ? fromPlayer : fromGems;
+            // Tiny jitter breaks ties so the layout is not a rigid lattice.
+            const score = nearest + rng() * 0.01;
 
             if (score > bestScore) {
                 bestScore = score;
-                best = at;
+                best = cell;
             }
+        }
+
+        if (!best) {
+            break;
+        }
+
+        picked.push(best);
+    }
+
+    return picked;
+}
+
+function nextSpreadRegion (
+    player: { x: number; y: number },
+    others: { x: number; y: number }[],
+    used: Set<string>,
+    salt: number
+): RegionCell {
+    const free = eligibleRegions().filter((cell) => !used.has(regionKey(cell)));
+    const candidates = free.length > 0 ? free : eligibleRegions();
+    let best = candidates[0] ?? { col: 0, row: 0 };
+    let bestScore = -1;
+    const rng = mulberry32((0xbad5eed ^ (salt * 97)) >>> 0);
+
+    for (const cell of candidates) {
+        const at = jitteredRegion(cell.col, cell.row, salt);
+        const fromPlayer = Math.hypot(at.x - player.x, at.y - player.y);
+        let fromGems = Number.POSITIVE_INFINITY;
+
+        for (const other of others) {
+            fromGems = Math.min(fromGems, Math.hypot(at.x - other.x, at.y - other.y));
+        }
+
+        if (others.length === 0) {
+            fromGems = fromPlayer;
+        }
+
+        const score = fromGems + fromPlayer * 0.15 + rng() * 8;
+
+        if (score > bestScore) {
+            bestScore = score;
+            best = cell;
         }
     }
 
     return best;
+}
+
+function spotInRegion (
+    cell: RegionCell,
+    player: { x: number; y: number },
+    others: { x: number; y: number }[],
+    salt: number
+): { x: number; y: number } {
+    const primary = jitteredRegion(cell.col, cell.row, salt);
+
+    if (isClearSpot(primary, player, others)) {
+        return primary;
+    }
+
+    for (let nudge = 1; nudge <= 8; nudge++) {
+        const alt = jitteredRegion(cell.col, cell.row, salt + nudge * 31);
+
+        if (isClearSpot(alt, player, others)) {
+            return alt;
+        }
+    }
+
+    return primary;
+}
+
+function isClearSpot (
+    at: { x: number; y: number },
+    player: { x: number; y: number },
+    others: { x: number; y: number }[]
+): boolean {
+    if (Math.hypot(at.x - player.x, at.y - player.y) < MIN_FROM_PLAYER) {
+        return false;
+    }
+
+    return others.every((other) => Math.hypot(at.x - other.x, at.y - other.y) >= MIN_FROM_GEMS);
+}
+
+function fallbackCell (
+    player: { x: number; y: number },
+    others: { x: number; y: number }[]
+): RegionCell {
+    return nextSpreadRegion(player, others, occupiedRegions(others), others.length);
+}
+
+function eligibleRegions (): RegionCell[] {
+    const cells: RegionCell[] = [];
+
+    for (let row = 0; row < REGION_ROWS; row++) {
+        for (let col = 0; col < REGION_COLS; col++) {
+            if (isReservedRegion(col, row)) {
+                continue;
+            }
+
+            cells.push({ col, row });
+        }
+    }
+
+    return cells;
+}
+
+function isReservedRegion (col: number, row: number): boolean {
+    if (col === START_COL && row === START_ROW) {
+        return true;
+    }
+
+    if (col === PASTURE_COL && row === PASTURE_ROW) {
+        return true;
+    }
+
+    if (col === WATER_COL && row === WATER_ROW) {
+        return true;
+    }
+
+    const edgeCol = col === 0 || col === REGION_COLS - 1;
+    const edgeRow = row === 0 || row === REGION_ROWS - 1;
+
+    // Map corners host the sheepfold; keep gems out of those cells.
+    return edgeCol && edgeRow;
+}
+
+function occupiedRegions (points: { x: number; y: number }[]): Set<string> {
+    const used = new Set<string>();
+
+    for (const point of points) {
+        const region = worldToRegion(point.x, point.y);
+        used.add(regionKey(region));
+    }
+
+    return used;
+}
+
+function regionKey (cell: RegionCell): string {
+    return `${cell.col},${cell.row}`;
+}
+
+function regionDist (a: RegionCell, b: RegionCell): number {
+    const dx = (a.col - b.col) * REGION_WIDTH;
+    const dy = (a.row - b.row) * REGION_HEIGHT;
+
+    return Math.hypot(dx, dy);
 }
 
 function jitteredRegion (col: number, row: number, salt: number): { x: number; y: number } {
@@ -190,8 +329,8 @@ function jitteredRegion (col: number, row: number, salt: number): { x: number; y
     const rng = mulberry32((0x9e3779b9 + salt * 17 + col * 131 + row * 257) >>> 0);
 
     return {
-        x: at.x + (rng() - 0.5) * REGION_WIDTH * 0.28,
-        y: at.y + (rng() - 0.5) * REGION_HEIGHT * 0.28
+        x: at.x + (rng() - 0.5) * REGION_WIDTH * 0.45,
+        y: at.y + (rng() - 0.5) * REGION_HEIGHT * 0.45
     };
 }
 
