@@ -1,0 +1,49 @@
+What would make Shepherd more fun
+=================================
+
+Concrete to this game — the watercolor 7×7, the named flock, tap-to-move, bandage button, night howls, Bible gems — not generic “add combat / skill tree” notes.
+
+Flock feel
+----------
+- Let each sheep’s habit show in a one-line cue the first time it happens: “Snowball is wandering.” “Biscuit found a snack.” “Milo is hiding behind Clover.” The personalities are in the follow code now; they need a readable joke so players notice.
+- Pet combos: pet two sheep in a row and they bonk heads / dance together. Clover starts it; Milo only joins if another sheep is already dancing.
+- Carry-and-set-down a tired sheep (Biscuit) for twenty seconds. Funny walk, then he trots extra fast out of guilt.
+- A rare “all four look at you” pause when you stand still in the pasture. No button. Just the flock facing the shepherd.
+
+Night
+-----
+- The wolf sprite should be glimpsed, then gone: a rustle in the veil, eyeshine, then only the howl. Chasing it is a dead end on purpose.
+- Campfire at the fold actually warms the night veil (alpha dips in a radius). Sitting there with the staff equipped stops scared baahs.
+- Staff swing is not an attack: a short tap-radius that startles a wolf into fleeing and calls lagging sheep (Snowball) two follow-slots closer for a few seconds.
+
+Care toys
+---------
+- Thorns already snag; add a tiny wool tuft left on the bush after you free someone, so the map remembers the mishap.
+- Let the bandage button stay the “care” button for oil, splinters, and thorns so the player already knows the verb.
+- Water splash when they drink; a few green specks when they eat. Cheap juice, huge cozy payoff.
+- A “count them” gesture at the gate: tap the fold, names pop in a ring. Missing name pulses. This is hide-and-seek the game is already about.
+
+Gems and speech
+---------------
+- The gem ding is the treat; add a second, lower chime when that gem’s verse is one you have already heard in the story, so collectors feel the overlap with Psalm 23 / John 10.
+- Treasure chest: tap a heard verse to hear it again. People will replay “I am the gate.”
+- One “wrong” gem that is just a pretty rock. Shepherd says “Not scripture. Still pretty.” Keeps the joke gentle.
+
+Movement and feel
+-----------------
+- Walking noises are in; vary dirt vs grass vs water-edge (wetter, shorter). The map already has those biomes.
+- A tiny dust puff under the shepherd every other step. Reads on watercolor better than a bob animation.
+- Click-move leaves a faint footprint trail that fades, so you can see where you left Snowball behind.
+
+Second-day fantasy (the fun version of Psalm 23:5–6)
+----------------------------------------------------
+- A picnic table the sheep *climb on*. Chaos, then they lie down. “You prepare a table before me” as slapstick that still lands.
+- Oil anointing makes a sheep shiny for a minute (brighter tint). Children will anoint Milo over and over. Let them.
+- Goodness and Mercy as two slightly goofy older ewes who refuse to hurry and block a wolf’s line of sight just by standing there.
+
+What would make it less fun
+---------------------------
+- Making the wolf fightable.
+- Punishing strays with HP.
+- Hiding Milo again as an optional side find.
+- Replacing the bandage kneel with a QTE.
