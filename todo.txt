@@ -1,0 +1,12 @@
+replace the leading _ with leading X tasks are complete.
+_ remove the tent from the sheep pen
+_ move the sleeping position of the shepherd to line up with the opening in the pen.
+_ Add a wolf sprite.
+_ improve the shepherd sprite.
+_ add thorns in the game. Put a few around the map. If a sheep touches it, they get stuck in it and need help. Similar to the bandage stuff.
+_ generate ideas of content to add to the game to have more activities, probably before getting to the pen, or add a second day before "we will all be changed" - content.txt
+_ generate ideas of what could make the game more fun - fun.txt
+_ improve sheep personality implementation.
+_ Milo doesn't seem to be part of the main story. Let's figure out a place to put finding Milo so it isn't missed, maybe during night after the staff? or before the hole?
+_ generate some walking noises and add them.
+_ generate a ding sound for when you find a Bible gem. high pitch, short.
