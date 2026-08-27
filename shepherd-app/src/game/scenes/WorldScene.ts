@@ -551,16 +551,6 @@ export class WorldScene extends Scene {
             return this.foundCount === 1 ? 'Another sheep is missing.' : 'Find your sheep.';
         }
 
-        const hungry = this.flock.find((sheep) => sheep.hungry);
-
-        if (hungry) {
-            return `${hungry.name} is hungry.`;
-        }
-
-        if (this.flock.some((sheep) => sheep.thirsty)) {
-            return 'The sheep are thirsty.';
-        }
-
         const hurt = this.flock.find((sheep) => sheep.hurt && sheep.discovered);
 
         if (hurt) {
@@ -571,6 +561,16 @@ export class WorldScene extends Scene {
 
         if (stuck) {
             return `Help ${stuck.name} out of the thorns.`;
+        }
+
+        const hungry = this.flock.find((sheep) => sheep.hungry);
+
+        if (hungry) {
+            return `${hungry.name} is hungry.`;
+        }
+
+        if (this.flock.some((sheep) => sheep.thirsty)) {
+            return 'The sheep are thirsty.';
         }
 
         if (this.heardJohn109 && !this.heardCorinthians) {

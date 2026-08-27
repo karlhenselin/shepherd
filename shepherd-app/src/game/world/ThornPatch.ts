@@ -3,7 +3,7 @@ import { PASTURE_COL, PASTURE_ROW, START_COL, START_ROW, WATER_COL, WATER_ROW, r
 
 const TEXTURE_KEY = 'thorns';
 const FALLBACK_KEY = 'thorns-drawn';
-const SNAG_RANGE = 46;
+const SNAG_RANGE = 72;
 const DISPLAY = 72;
 
 export class ThornPatch {
