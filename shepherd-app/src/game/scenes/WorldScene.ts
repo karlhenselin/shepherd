@@ -1069,7 +1069,7 @@ export class WorldScene extends Scene {
                     return;
                 }
 
-                stuck.freeFromThorns();
+                stuck.freeFromThorns(this.nudgeOffThorns(stuck));
                 this.playLines([
                     `You free ${stuck.name} from the thorns.`
                 ], () => {
@@ -1078,6 +1078,23 @@ export class WorldScene extends Scene {
                 });
             });
         });
+    }
+
+    private nudgeOffThorns (sheep: Sheep): { x: number; y: number } | undefined {
+        const thorn = this.thorns.find((patch) => patch.ensnares(sheep.sprite.x, sheep.sprite.y));
+
+        if (!thorn) {
+            return undefined;
+        }
+
+        const dx = sheep.sprite.x - thorn.x;
+        const dy = sheep.sprite.y - thorn.y;
+        const len = Math.hypot(dx, dy) || 1;
+
+        return {
+            x: thorn.x + (dx / len) * 96,
+            y: thorn.y + (dy / len) * 96
+        };
     }
 
     /** Following sheep sit off to the side of the hole while the shepherd helps. */

@@ -113,6 +113,7 @@ export class Sheep {
     private danceHomeX = 0;
     private danceHomeY = 0;
     private scootUntil = 0;
+    private thornImmuneUntil = 0;
     private penTarget: { x: number; y: number } | null = null;
     /** Sit aside during hole rescue (not in the pit). */
     private rescueWait: { x: number; y: number } | null = null;
@@ -242,9 +243,15 @@ export class Sheep {
         this.placeShadow();
     }
 
-    freeFromThorns (): void {
+    freeFromThorns (away?: { x: number; y: number }): void {
+        this.thornImmuneUntil = this.scene.time.now + 5000;
         this.sprite.setAngle(0);
         this.sprite.setTint(SHEEP_TINT[this.name] ?? 0xffffff);
+
+        if (away) {
+            this.sprite.setPosition(away.x, away.y);
+        }
+
         this.beginFollowing();
         this.placeShadow();
     }
@@ -436,7 +443,7 @@ export class Sheep {
             return 'drank';
         }
 
-        if (this.mood === 'following' && !this.hurt) {
+        if (this.mood === 'following' && !this.hurt && this.scene.time.now >= this.thornImmuneUntil) {
             const snagged = thorns.find((thorn) => thorn.ensnares(this.sprite.x, this.sprite.y));
 
             if (snagged) {
