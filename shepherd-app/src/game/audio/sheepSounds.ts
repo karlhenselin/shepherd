@@ -362,12 +362,16 @@ function firstDelayFor (sheep: Sheep): number {
 }
 
 function delayFor (sheep: Sheep): number {
-    if (sheep.hurt) {
+    if (sheep.hurt || sheep.mood === 'stuck') {
         return 2200 + Math.random() * 2300;
     }
 
     if (sheep.mood === 'waiting') {
-        return 10000 + Math.random() * 9000;
+        return (sheep.nervous ? 7000 : 10000) + Math.random() * (sheep.nervous ? 6000 : 9000);
+    }
+
+    if (sheep.nervous) {
+        return 14000 + Math.random() * 10000;
     }
 
     return 22000 + Math.random() * 18000;
@@ -384,7 +388,7 @@ function playBleat (scene: Scene, sheep: Sheep, listener: { x: number; y: number
         return true;
     }
 
-    const key = pickLoaded(scene, sheep.hurt ? LOUD_KEYS : QUIET_KEYS);
+    const key = pickLoaded(scene, sheep.hurt || sheep.mood === 'stuck' ? LOUD_KEYS : QUIET_KEYS);
 
     if (!key) {
         return false;
@@ -409,6 +413,10 @@ function pickNightSheep (flock: Sheep[]): Sheep | null {
 function rollScaredBaah (sheep: Sheep, night: NightBaahContext): boolean {
     const dusk = 1 - clamp(night.elapsedMs / 120000, 0, 1);
     let chance = lerp(0.24, 0.58, dusk);
+
+    if (sheep.nervous) {
+        chance = Math.min(0.82, chance + 0.18);
+    }
 
     if (sheep.mood === 'penned') {
         chance *= 0.18;
@@ -518,7 +526,7 @@ function bleatSettings (scene: Scene, sheep: Sheep, listener: { x: number; y: nu
     const dist = Math.hypot(dx, dy);
     const pan = stereoPan(scene, sheep.sprite.x);
 
-    if (sheep.hurt) {
+    if (sheep.hurt || sheep.mood === 'stuck') {
         const falloff = 1 - clamp(dist / HEAR_HURT, 0, 1);
         const high = Math.random() < 0.55;
 

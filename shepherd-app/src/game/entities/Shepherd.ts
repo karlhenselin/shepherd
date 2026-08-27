@@ -4,7 +4,8 @@ const SPEED = 180;
 const ARRIVE_DISTANCE = 8;
 const SHEPHERD_W = 48;
 const SHEPHERD_H = 48;
-const SHADOW_OFFSET = 20;
+const SHEPHERD_DISPLAY = 56;
+const SHADOW_OFFSET = 22;
 const PET_MS = 1800;
 const PET_KNEEL_ANGLE = 22;
 const PET_SCALE_Y = 0.82;
@@ -35,6 +36,7 @@ export class Shepherd {
 
         this.sprite = scene.physics.add.sprite(x, y, 'shepherd');
         this.sprite.setDepth(6);
+        this.sprite.setDisplaySize(SHEPHERD_DISPLAY, SHEPHERD_DISPLAY);
         this.body = this.sprite.body as Physics.Arcade.Body;
         this.body.setCollideWorldBounds(true);
         this.body.setCircle(14, 8, 10);
@@ -75,6 +77,14 @@ export class Shepherd {
 
     get isGuided (): boolean {
         return this.guided;
+    }
+
+    get isMoving (): boolean {
+        if (this.lyingDown || this.isPetting) {
+            return false;
+        }
+
+        return Math.hypot(this.body.velocity.x, this.body.velocity.y) > 24;
     }
 
     /** Last travel direction as a unit vector (stable while standing still). */
@@ -167,6 +177,7 @@ export class Shepherd {
             ? (this.staffEquipped ? 'shepherd-staff-white' : 'shepherd-white')
             : (this.staffEquipped ? 'shepherd-staff' : 'shepherd');
         this.sprite.setTexture(key);
+        this.sprite.setDisplaySize(SHEPHERD_DISPLAY, SHEPHERD_DISPLAY);
     }
 
     update (): void {
@@ -259,11 +270,10 @@ export class Shepherd {
 
 function ensureShepherdTextures (scene: Scene): void {
     const keys = ['shepherd', 'shepherd-staff', 'shepherd-white', 'shepherd-staff-white'];
+    const missing = keys.filter((key) => !scene.textures.exists(key));
 
-    for (const key of keys) {
-        if (scene.textures.exists(key)) {
-            scene.textures.remove(key);
-        }
+    if (missing.length === 0) {
+        return;
     }
 
     const g = scene.add.graphics();

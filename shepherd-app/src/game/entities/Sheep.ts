@@ -11,6 +11,8 @@ const NIGHT_FOLLOW_DISTANCE = 36;
 const FOLLOW_LATERAL = 28;
 const DRINK_MS = 2600;
 const EAT_MS = 2600;
+const SNACK_MS = 1400;
+const SNACK_COOLDOWN_MS = 16000;
 const SHEEP_SIZE = 48;
 const SHADOW_OFFSET = 18;
 const WADDLE_DEG = 7;
@@ -28,8 +30,64 @@ const SHEEP_TINT: Record<string, number> = {
     Milo: 0xd5cce6
 };
 
-export type SheepMood = 'waiting' | 'following' | 'drinking' | 'eating' | 'hurt' | 'penned';
-export type SheepEvent = 'found' | 'ate' | 'drank' | 'rejoined' | null;
+export type SheepMood = 'waiting' | 'following' | 'drinking' | 'eating' | 'hurt' | 'stuck' | 'penned';
+export type SheepEvent = 'found' | 'ate' | 'drank' | 'rejoined' | 'snagged' | null;
+
+type SheepPersonality = {
+    followSpeed: number;
+    trailExtra: number;
+    lateralScale: number;
+    strayWeight: number;
+    wander: number;
+    snackSeek: boolean;
+    huddleWithFlock: boolean;
+    nervous: boolean;
+};
+
+const PERSONALITY: Record<string, SheepPersonality> = {
+    Clover: {
+        followSpeed: FOLLOW_SPEED * 1.04,
+        trailExtra: -10,
+        lateralScale: 0.7,
+        strayWeight: 0.35,
+        wander: 3,
+        snackSeek: false,
+        huddleWithFlock: true,
+        nervous: false
+    },
+    Snowball: {
+        followSpeed: FOLLOW_SPEED * 1.06,
+        trailExtra: 22,
+        lateralScale: 1.15,
+        strayWeight: 1.85,
+        wander: 26,
+        snackSeek: false,
+        huddleWithFlock: false,
+        nervous: false
+    },
+    Biscuit: {
+        followSpeed: FOLLOW_SPEED * 0.78,
+        trailExtra: 14,
+        lateralScale: 1,
+        strayWeight: 1.15,
+        wander: 6,
+        snackSeek: true,
+        huddleWithFlock: false,
+        nervous: false
+    },
+    Milo: {
+        followSpeed: FOLLOW_SPEED * 0.96,
+        trailExtra: -6,
+        lateralScale: 0.55,
+        strayWeight: 0.42,
+        wander: 8,
+        snackSeek: false,
+        huddleWithFlock: true,
+        nervous: true
+    }
+};
+
+const DEFAULT_PERSONALITY: SheepPersonality = PERSONALITY.Clover;
 
 /** Optional zone followers must not enter (e.g. the sheep hole). */
 export type KeepOutZone = { x: number; y: number; radius: number };
@@ -46,8 +104,10 @@ export class Sheep {
     private readonly scene: Scene;
     private readonly followSlot: number;
     private readonly shadow: GameObjects.Image;
+    private readonly personality: SheepPersonality;
     private drinkUntil = 0;
     private eatUntil = 0;
+    private nextSnackAt = 0;
     private danceUntil = 0;
     private nextPetAt = 0;
     private danceHomeX = 0;
@@ -61,6 +121,7 @@ export class Sheep {
         this.scene = scene;
         this.name = name;
         this.followSlot = followSlot;
+        this.personality = PERSONALITY[name] ?? DEFAULT_PERSONALITY;
         ensureSheepTexture(scene);
         ensureSheepShadow(scene);
 
@@ -93,6 +154,18 @@ export class Sheep {
 
     get isRescueWaiting (): boolean {
         return this.rescueWait !== null;
+    }
+
+    get strayWeight (): number {
+        return this.personality.strayWeight;
+    }
+
+    get nervous (): boolean {
+        return this.personality.nervous;
+    }
+
+    get followSpeed (): number {
+        return this.personality.followSpeed;
     }
 
     /** Following sheep that aren't hurt / penned / mid-meal. */
@@ -158,9 +231,27 @@ export class Sheep {
         this.placeShadow();
     }
 
+    snagInThorns (): void {
+        this.clearHappyDance();
+        this.rescueWait = null;
+        this.mood = 'stuck';
+        this.sprite.setAngle(18);
+        this.sprite.setTint(0xd8c4a0);
+        this.body.setImmovable(true);
+        this.body.setVelocity(0, 0);
+        this.placeShadow();
+    }
+
+    freeFromThorns (): void {
+        this.sprite.setAngle(0);
+        this.sprite.setTint(SHEEP_TINT[this.name] ?? 0xffffff);
+        this.beginFollowing();
+        this.placeShadow();
+    }
+
     /** Amble to a spot beside the hole and sit until endRescueWait(). */
     beginRescueWait (x: number, y: number): void {
-        if (this.hurt || this.mood === 'hurt' || this.mood === 'penned') {
+        if (this.hurt || this.mood === 'hurt' || this.mood === 'penned' || this.mood === 'stuck') {
             return;
         }
 
@@ -220,7 +311,9 @@ export class Sheep {
         water: WaterSource[],
         grass: GrassPatch[],
         huddle = false,
-        keepOut: KeepOutZone | null = null
+        keepOut: KeepOutZone | null = null,
+        thorns: Array<{ ensnares: (x: number, y: number) => boolean }> = [],
+        companions: Sheep[] = []
     ): SheepEvent {
         const now = this.scene.time.now;
         const dist = Math.hypot(shepherd.sprite.x - this.sprite.x, shepherd.sprite.y - this.sprite.y);
@@ -286,6 +379,13 @@ export class Sheep {
             return null;
         }
 
+        if (this.mood === 'stuck') {
+            this.body.setVelocity(0, 0);
+            this.sprite.setAngle(18 + Math.sin(now / 220) * 4);
+            this.placeShadow();
+            return null;
+        }
+
         if (this.mood === 'penned') {
             if (this.penTarget) {
                 const dist = Math.hypot(this.penTarget.x - this.sprite.x, this.penTarget.y - this.sprite.y);
@@ -328,11 +428,24 @@ export class Sheep {
             return 'ate';
         }
 
+        if (!this.hungry && this.trySnack(grass, now)) {
+            return null;
+        }
+
         if (this.thirsty && this.tryDrink(water, now)) {
             return 'drank';
         }
 
-        let { targetX, targetY } = this.trailTarget(shepherd, huddle);
+        if (this.mood === 'following' && !this.hurt) {
+            const snagged = thorns.find((thorn) => thorn.ensnares(this.sprite.x, this.sprite.y));
+
+            if (snagged) {
+                this.snagInThorns();
+                return 'snagged';
+            }
+        }
+
+        let { targetX, targetY } = this.trailTarget(shepherd, huddle, companions);
 
         if (keepOut) {
             const pushed = pushOutsideKeepOut(targetX, targetY, keepOut);
@@ -343,7 +456,7 @@ export class Sheep {
         const followDist = Math.hypot(targetX - this.sprite.x, targetY - this.sprite.y);
 
         if (followDist > 18) {
-            this.moveToward(targetX, targetY, FOLLOW_SPEED);
+            this.moveToward(targetX, targetY, this.personality.followSpeed);
             this.sprite.setAngle(Math.sin(now / 90) * WADDLE_DEG);
         }
         else {
@@ -473,18 +586,37 @@ export class Sheep {
      * Follow point behind the shepherd's travel direction, with lateral fan so
      * sheep don't stack on one trail spot (slot 0 dead-center behind).
      */
-    private trailTarget (shepherd: Shepherd, huddle: boolean): { targetX: number; targetY: number } {
-        const spacing = huddle ? NIGHT_FOLLOW_DISTANCE : FOLLOW_DISTANCE;
+    private trailTarget (
+        shepherd: Shepherd,
+        huddle: boolean,
+        companions: Sheep[]
+    ): { targetX: number; targetY: number } {
+        const spacing = (huddle ? NIGHT_FOLLOW_DISTANCE : FOLLOW_DISTANCE) + this.personality.trailExtra;
         const { x: hx, y: hy } = shepherd.moveHeading;
         const behindX = -hx;
         const behindY = -hy;
         const perpX = -hy;
         const perpY = hx;
-        const lateral = trailLateralOffset(this.followSlot);
+        const lateral = trailLateralOffset(this.followSlot) * this.personality.lateralScale;
+        const now = this.scene.time.now;
+        const wander = this.personality.wander;
+        const jitterX = wander > 0 ? Math.sin(now / 420 + this.followSlot) * wander : 0;
+        const jitterY = wander > 0 ? Math.cos(now / 380 + this.followSlot * 1.7) * wander * 0.6 : 0;
+
+        if (this.personality.huddleWithFlock) {
+            const buddy = nearestCompanion(this, companions);
+
+            if (buddy) {
+                return {
+                    targetX: buddy.sprite.x + behindX * 28 + perpX * lateral * 0.4 + jitterX * 0.4,
+                    targetY: buddy.sprite.y + behindY * 28 + perpY * lateral * 0.4 + jitterY * 0.4
+                };
+            }
+        }
 
         return {
-            targetX: shepherd.sprite.x + behindX * spacing + perpX * lateral,
-            targetY: shepherd.sprite.y + behindY * spacing + perpY * lateral
+            targetX: shepherd.sprite.x + behindX * spacing + perpX * lateral + jitterX,
+            targetY: shepherd.sprite.y + behindY * spacing + perpY * lateral + jitterY
         };
     }
 
@@ -510,6 +642,26 @@ export class Sheep {
         this.eatUntil = now + EAT_MS;
         this.body.setVelocity(0, 0);
         this.sprite.setAngle(-10);
+        this.placeShadow();
+        return true;
+    }
+
+    private trySnack (grass: GrassPatch[], now: number): boolean {
+        if (!this.personality.snackSeek || now < this.nextSnackAt) {
+            return false;
+        }
+
+        const patch = grass.find((tuft) => tuft.isNear(this.sprite.x, this.sprite.y));
+
+        if (!patch) {
+            return false;
+        }
+
+        this.mood = 'eating';
+        this.eatUntil = now + SNACK_MS;
+        this.nextSnackAt = now + SNACK_COOLDOWN_MS;
+        this.body.setVelocity(0, 0);
+        this.sprite.setAngle(-8);
         this.placeShadow();
         return true;
     }
@@ -557,6 +709,26 @@ function pushOutsideKeepOut (x: number, y: number, zone: KeepOutZone): { x: numb
 
     const scale = zone.radius / dist;
     return { x: zone.x + dx * scale, y: zone.y + dy * scale };
+}
+
+function nearestCompanion (self: Sheep, companions: Sheep[]): Sheep | null {
+    let closest: Sheep | null = null;
+    let best = Number.POSITIVE_INFINITY;
+
+    for (const other of companions) {
+        if (other === self || other.mood !== 'following') {
+            continue;
+        }
+
+        const dist = Math.hypot(other.sprite.x - self.sprite.x, other.sprite.y - self.sprite.y);
+
+        if (dist < best) {
+            best = dist;
+            closest = other;
+        }
+    }
+
+    return closest;
 }
 
 /** Fan left/right of the trail: 0 center, then +L, −L, +2L, −2L, … */

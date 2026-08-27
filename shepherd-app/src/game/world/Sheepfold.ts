@@ -38,8 +38,9 @@ export class Sheepfold {
         };
     }
 
+    /** Opening is the south-east gap in the painted pen (1536×1024 art, shown at 360×240). */
     gateSpot (): { x: number; y: number } {
-        return { x: this.x + 78, y: this.y + 42 };
+        return { x: this.x + 10, y: this.y + 82 };
     }
 }
 
@@ -76,7 +77,6 @@ function paintSheepfold (ctx: CanvasRenderingContext2D): void {
     const fold = { x: 118, y: 112, rx: 86, ry: 58 };
     drawStraw(ctx, fold, rng);
     drawFence(ctx, fold, rng);
-    drawTent(ctx, 228, 78);
     drawCampfire(ctx, 232, 168);
 }
 
@@ -197,50 +197,6 @@ function drawRail (
     ctx.stroke();
 }
 
-function drawTent (ctx: CanvasRenderingContext2D, cx: number, cy: number): void {
-    const peak = { x: cx, y: cy - 46 };
-    const left = { x: cx - 38, y: cy + 18 };
-    const right = { x: cx + 40, y: cy + 22 };
-    const front = { x: cx + 4, y: cy + 26 };
-
-    ctx.fillStyle = 'rgba(58, 42, 24, 0.20)';
-    ctx.beginPath();
-    ctx.ellipse(cx + 2, cy + 22, 42, 12, -0.18, 0, Math.PI * 2);
-    ctx.fill();
-
-    fillPoly(ctx, [peak, left, front], '#d8c4a0');
-    fillPoly(ctx, [peak, front, right], '#a67c52');
-    fillPoly(ctx, [peak, { x: cx - 10, y: cy - 8 }, front], '#c4a574');
-
-    ctx.strokeStyle = '#7a5c3e';
-    ctx.lineWidth = 3;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(peak.x, peak.y);
-    ctx.lineTo(left.x - 4, left.y + 4);
-    ctx.moveTo(peak.x, peak.y);
-    ctx.lineTo(right.x + 4, right.y + 4);
-    ctx.stroke();
-
-    ctx.fillStyle = '#5c4634';
-    ctx.beginPath();
-    ctx.arc(peak.x, peak.y + 2, 3, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.strokeStyle = 'rgba(61, 44, 30, 0.55)';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.moveTo(left.x, left.y);
-    ctx.lineTo(left.x - 10, left.y + 8);
-    ctx.moveTo(right.x, right.y);
-    ctx.lineTo(right.x + 10, right.y + 6);
-    ctx.stroke();
-
-    ctx.fillStyle = '#3d2c1e';
-    fillDot(ctx, left.x - 10, left.y + 8, 2);
-    fillDot(ctx, right.x + 10, right.y + 6, 2);
-}
-
 function drawCampfire (ctx: CanvasRenderingContext2D, cx: number, cy: number): void {
     ctx.fillStyle = 'rgba(212, 120, 58, 0.28)';
     ctx.beginPath();
@@ -311,19 +267,6 @@ function fillFlame (
     ctx.quadraticCurveTo(x + w, y - h * 0.35, x + w * 0.35, y + 4);
     ctx.quadraticCurveTo(x, y + 8, x - w * 0.35, y + 4);
     ctx.quadraticCurveTo(x - w, y - h * 0.35, x, y - h);
-    ctx.fill();
-}
-
-function fillPoly (ctx: CanvasRenderingContext2D, points: { x: number; y: number }[], color: string): void {
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(points[0].x, points[0].y);
-
-    for (let i = 1; i < points.length; i++) {
-        ctx.lineTo(points[i].x, points[i].y);
-    }
-
-    ctx.closePath();
     ctx.fill();
 }
 

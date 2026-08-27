@@ -1,6 +1,8 @@
 import { Scene } from 'phaser';
+import { loadGemDing } from '../audio/gemDing';
 import { loadHowlSounds } from '../audio/howl';
 import { loadSheepSounds } from '../audio/sheepSounds';
+import { loadWalkSounds } from '../audio/walkSounds';
 
 export class Preloader extends Scene
 {
@@ -19,15 +21,22 @@ export class Preloader extends Scene
         //  Load the assets for the game - Replace with your own assets
         this.load.setPath('assets');
 
-        this.load.image('logo', 'logo.png');
         this.load.image('sheep', 'sheep.png');
         this.load.image('sheepfold', 'sheepfold.png');
         this.load.image('water-source', 'water.png');
+        this.load.image('wolf', 'wolf.png');
+        this.load.image('shepherd', 'shepherd.png');
+        this.load.image('shepherd-staff', 'shepherd-staff.png');
+        this.load.image('shepherd-white', 'shepherd-white.png');
+        this.load.image('shepherd-staff-white', 'shepherd-staff-white.png');
+        this.load.image('thorns', 'thorns.png');
         this.load.audio('exhale', 'audio/exhale.mp3');
         this.load.audio('wanderlust', 'music/wanderlust-justin-lee-main-version-29117-01-40.mp3');
         this.load.audio('wonders-of-nature', 'music/wonders-of-nature-roger-gabalda-main-version-01-31-11044.mp3');
         loadSheepSounds(this.load);
         loadHowlSounds(this.load);
+        loadWalkSounds(this.load);
+        loadGemDing(this.load);
     }
 
     create ()
