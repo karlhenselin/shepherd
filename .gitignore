@@ -32,11 +32,14 @@ Desktop.ini
 *.sln
 *.sw?
 
-# Android / Capacitor (later)
-android/.gradle
-android/app/build
-android/local.properties
-android/captures
+# Android / Capacitor
+shepherd-app/android/.gradle
+shepherd-app/android/app/build
+shepherd-app/android/build
+shepherd-app/android/local.properties
+shepherd-app/android/captures
+shepherd-app/android/.idea
+shepherd-app/android/**/build
 *.apk
 *.aab
 *.ap_

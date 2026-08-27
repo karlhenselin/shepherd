@@ -1,6 +1,6 @@
 replace the leading _ with leading X tasks are complete.
-_ remove the tent from the sheep pen
-_ move the sleeping position of the shepherd to line up with the opening in the pen.
+X remove the tent from the sheep pen
+X move the sleeping position of the shepherd to line up with the opening in the pen.
 _ Add a wolf sprite.
 _ improve the shepherd sprite.
 _ add thorns in the game. Put a few around the map. If a sheep touches it, they get stuck in it and need help. Similar to the bandage stuff.

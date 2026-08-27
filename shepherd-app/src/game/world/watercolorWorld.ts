@@ -98,18 +98,18 @@ export class WatercolorWorld {
         const originY = start.y - REGION_HEIGHT / 2;
 
         for (const [index, wash] of [...HEAVENS, ...EARTH].entries()) {
-            const sky = 'sky' in wash ? wash.sky : undefined;
+            const skyColor = 'sky' in wash && typeof wash.sky === 'string' ? wash.sky : undefined;
 
             this.creationQueue.push({
                 x: originX + wash.x * REGION_WIDTH,
                 y: originY + wash.y * REGION_HEIGHT,
                 rx: wash.rx * REGION_WIDTH,
                 ry: wash.ry * REGION_HEIGHT,
-                color: asSky && sky ? sky : wash.color,
+                color: asSky && skyColor ? skyColor : wash.color,
                 alpha: wash.y < 0.5 ? 0.13 : 0.11,
                 seed: seedFor(index + 1),
                 creation: true,
-                groundColor: asSky && sky ? wash.color : undefined
+                groundColor: asSky && skyColor ? wash.color : undefined
             });
         }
     }
@@ -450,7 +450,7 @@ function createBlobPainter (
     };
 }
 
-function trailColor (x: number, y: number, rng: () => number): string {
+function trailColor (_x: number, y: number, rng: () => number): string {
     const start = startCenter();
     const north = (start.y - y) / WORLD_HEIGHT;
     const goldChance = 0.22 + Math.max(0, north) * 0.5;

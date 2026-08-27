@@ -17,13 +17,19 @@
     "dev": "node log.js dev & vite --config vite/config.dev.mjs",
     "build": "node log.js build & vite build --config vite/config.prod.mjs",
     "dev-nolog": "vite --config vite/config.dev.mjs",
-    "build-nolog": "vite build --config vite/config.prod.mjs"
+    "build-nolog": "vite build --config vite/config.prod.mjs",
+    "cap:sync": "npm run build-nolog && npx cap sync android",
+    "android": "npx cap open android"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.0",
     "typescript": "~5.7.2",
     "vite": "^6.3.1"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@idleflowgames/capacitor-play-games": "^0.2.1",
     "phaser": "4.0.0",
     "terser": "^5.39.0"
   },

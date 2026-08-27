@@ -1,6 +1,6 @@
 const SAVE_KEY = 'shepherd-save';
 
-export type StoryCheckpoint = 'psalm-23-1' | 'psalm-23-2' | 'isaiah-53-6' | 'psalm-23-3' | 'psalm-23-3b' | 'psalm-23-4a' | 'psalm-23-4b' | 'psalm-23-4c' | 'found-staff' | 'john-10-2' | 'john-10-9' | '1-cor-15-51' | 'hurt-sheep' | 'found-sheep';
+export type StoryCheckpoint = 'psalm-23-1' | 'psalm-23-2' | 'isaiah-53-6' | 'psalm-23-3' | 'psalm-23-3b' | 'psalm-23-4a' | 'psalm-23-4b' | 'psalm-23-4c' | 'found-staff' | 'john-10-2' | 'john-10-9' | '1-cor-15-51' | 'hurt-sheep' | 'found-sheep' | 'found-gem';
 
 export type SavedPoint = { x: number; y: number };
 
@@ -30,6 +30,12 @@ export type GameSave = {
     water?: SavedPoint[];
     grass?: SavedPoint[];
     foundGems?: string[];
+    /** Logical Play Games achievement ids already earned (local queue). */
+    unlockedAchievements?: string[];
+    /** Active world BGM key (`wanderlust` / `wonders-of-nature`). Optional for older saves. */
+    musicKey?: string;
+    /** Playback position in seconds. Day progress saves keep this; night / dawn resets to 0. Optional for older saves; missing/invalid → start at 0. */
+    musicSeek?: number;
 };
 
 export function loadSave (): GameSave | null {

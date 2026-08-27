@@ -124,7 +124,7 @@ export const BIBLE_GEMS = [
     { id: 'isaiah-41-10', ref: 'Isaiah 41:10', text: 'Fear not, for I am with you…' },
     { id: 'joshua-1-9', ref: 'Joshua 1:9', text: 'Be strong and courageous. Do not be frightened…' },
     { id: 'psalm-34-18', ref: 'Psalm 34:18', text: 'The LORD is near to the brokenhearted…' },
-    { id: '1-peter-5-7', ref: '1 Peter 5:7', text: 'Casting all your anxieties on him, because he cares for you.' },
+    { id: '1-peter-5-7', ref: '1 Peter 5:7', text: 'Cast all your anxieties on him, because he cares for you.' },
     { id: 'psalm-55-22', ref: 'Psalm 55:22', text: 'Cast your burden on the LORD, and he will sustain you.' },
     { id: 'psalm-91-1-2', ref: 'Psalm 91:1-2', text: 'He who dwells in the shelter of the Most High…' },
     { id: 'philippians-4-13', ref: 'Philippians 4:13', text: 'I can do all things through him who strengthens me.' },

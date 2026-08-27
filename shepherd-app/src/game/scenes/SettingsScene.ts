@@ -1,4 +1,5 @@
 import { Scene, GameObjects } from 'phaser';
+import { showPlayAchievements, playGamesAvailable } from '../achievements/playGames';
 import { clearSave } from '../save/gameSave';
 
 const PAPER = 0xf7f3ea;
@@ -68,7 +69,25 @@ export class SettingsScene extends Scene {
             this.addLink(cx, y + 28, track.url, track.url, '16px');
         });
 
-        const reset = this.add.text(cx, height - 148, 'Reset my progress', {
+        const footerY = height - 148;
+
+        if (playGamesAvailable()) {
+            const achievements = this.add.text(cx, footerY - 64, 'Achievements', {
+                fontFamily: 'Georgia, Palatino, serif',
+                fontSize: '20px',
+                color: UMBER,
+                backgroundColor: '#f3ead8',
+                padding: { x: 18, y: 10 },
+                align: 'center'
+            }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+            this.tintOnHover(achievements, UMBER, '#5c4634');
+            achievements.on('pointerdown', () => {
+                void showPlayAchievements();
+            });
+        }
+
+        const reset = this.add.text(cx, footerY, 'Reset my progress', {
             fontFamily: 'Georgia, Palatino, serif',
             fontSize: '20px',
             color: '#7a3d2e',

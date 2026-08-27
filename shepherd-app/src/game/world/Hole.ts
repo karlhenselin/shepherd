@@ -30,6 +30,27 @@ export class Hole {
     get y (): number {
         return this.sprite.y;
     }
+
+    /** Scale + fade out, then destroy the sprite. Safe to call once. */
+    shrinkAway (durationMs = 720): void {
+        if (!this.sprite.active) {
+            return;
+        }
+
+        const scene = this.sprite.scene;
+        scene.tweens.killTweensOf(this.sprite);
+        scene.tweens.add({
+            targets: this.sprite,
+            scaleX: 0,
+            scaleY: 0,
+            alpha: 0,
+            duration: durationMs,
+            ease: 'Cubic.easeIn',
+            onComplete: () => {
+                this.sprite.destroy();
+            }
+        });
+    }
 }
 
 function ensureHoleTexture (scene: Scene): void {

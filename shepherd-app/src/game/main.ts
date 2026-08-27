@@ -2,6 +2,7 @@ import { Boot } from './scenes/Boot';
 import { AUTO, Game } from 'phaser';
 import { IntroScene } from './scenes/IntroScene';
 import { Preloader } from './scenes/Preloader';
+import { CheatScene } from './scenes/CheatScene';
 import { SettingsScene } from './scenes/SettingsScene';
 import { TreasureScene } from './scenes/TreasureScene';
 import { WorldScene } from './scenes/WorldScene';
@@ -24,7 +25,8 @@ const config: Phaser.Types.Core.GameConfig = {
         IntroScene,
         WorldScene,
         SettingsScene,
-        TreasureScene
+        TreasureScene,
+        CheatScene
     ]
 };
 

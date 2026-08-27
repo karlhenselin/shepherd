@@ -1,21 +1,58 @@
-import { GameObjects, Scene } from 'phaser';
+import { BlendModes, GameObjects, Scene } from 'phaser';
 import { mulberry32, paintWash } from './watercolorPaint';
 
 const ENTER_RANGE = 140;
 const TEXTURE_KEY = 'sheepfold';
+const GLOW_TEXTURE_KEY = 'campfire-glow';
 const WIDTH = 280;
 const HEIGHT = 210;
 const DISPLAY_WIDTH = 360;
 const DISPLAY_HEIGHT = 240;
 
+/**
+ * Campfire keep-out (stones + flames), in world pixels from the fold sprite center.
+ * Matches sheepfold.png fire pit; old gateSpot sat on this point.
+ */
+const FIRE_OFFSET_X = 135;
+const FIRE_OFFSET_Y = 74;
+/** Keep shepherd / sheep off the smaller fire ring. */
+export const FIRE_KEEP_OUT_RADIUS = 36;
+/** Sleep in the south fence opening (PNG gate between the rope-wrapped posts). */
+const GATE_OFFSET_X = -40;
+const GATE_OFFSET_Y = 64;
+
+/** Above night veil (15), below hints / sleep / UI (18+). */
+const GLOW_DEPTH = 16;
+/** Matches WorldScene NIGHT_VEIL_ALPHA — used to scale day→night brightness. */
+const NIGHT_VEIL_REF = 0.55;
+const GLOW_OUTER_SIZE = 160;
+const GLOW_CORE_SIZE = 70;
+
 export class Sheepfold {
     readonly sprite: GameObjects.Sprite;
+    private readonly glowOuter: GameObjects.Image;
+    private readonly glowCore: GameObjects.Image;
 
     constructor (scene: Scene, x: number, y: number) {
         ensureSheepfoldTexture(scene);
+        ensureCampfireGlowTexture(scene);
+
         this.sprite = scene.add.sprite(x, y, TEXTURE_KEY);
         this.sprite.setDisplaySize(DISPLAY_WIDTH, DISPLAY_HEIGHT);
         this.sprite.setDepth(2);
+
+        const fire = this.fireSpot();
+        this.glowOuter = scene.add.image(fire.x, fire.y, GLOW_TEXTURE_KEY);
+        this.glowOuter.setDisplaySize(GLOW_OUTER_SIZE, GLOW_OUTER_SIZE);
+        this.glowOuter.setBlendMode(BlendModes.ADD);
+        this.glowOuter.setDepth(GLOW_DEPTH);
+        this.glowOuter.setAlpha(0.20);
+
+        this.glowCore = scene.add.image(fire.x, fire.y - 6, GLOW_TEXTURE_KEY);
+        this.glowCore.setDisplaySize(GLOW_CORE_SIZE, GLOW_CORE_SIZE);
+        this.glowCore.setBlendMode(BlendModes.ADD);
+        this.glowCore.setDepth(GLOW_DEPTH + 0.01);
+        this.glowCore.setAlpha(0.30);
     }
 
     get x (): number {
@@ -26,20 +63,78 @@ export class Sheepfold {
         return this.sprite.y;
     }
 
+    /** Campfire pit center (stones + flames), not the pen / landmark center. */
+    fireSpot (): { x: number; y: number } {
+        return { x: this.x + FIRE_OFFSET_X, y: this.y + FIRE_OFFSET_Y };
+    }
+
     isNear (x: number, y: number): boolean {
         return Math.hypot(this.x - x, this.y - y) < ENTER_RANGE;
     }
 
     restSpot (slot: number): { x: number; y: number } {
-        const angle = (slot / 3) * Math.PI * 2;
+        // Four flock slots — `/3` stacked slot 0 with slot 3.
+        // Bias west into the dirt oval (not the east fence / campfire).
+        const angle = (slot / 4) * Math.PI * 2;
         return {
-            x: this.x - 8 + Math.cos(angle) * 36,
-            y: this.y + 6 + Math.sin(angle) * 22
+            x: this.x - 40 + Math.cos(angle) * 36,
+            y: this.y + 4 + Math.sin(angle) * 22
         };
     }
 
+    /** Lie down in the south fence opening. */
     gateSpot (): { x: number; y: number } {
-        return { x: this.x + 78, y: this.y + 42 };
+        return { x: this.x + GATE_OFFSET_X, y: this.y + GATE_OFFSET_Y };
+    }
+
+    /**
+     * Shepherd dawn stand — south of the flock gather so they are not
+     * sitting in walk-into pet range on wake.
+     */
+    wakeSpot (): { x: number; y: number } {
+        const gather = this.exitSpot(1.5);
+        return { x: gather.x, y: gather.y + 50 };
+    }
+
+    /**
+     * Outside the fold, south of the pen — dawn gather clear of the lower-right
+     * campfire and tent so trail-follow doesn't pull anyone back into the pen.
+     */
+    exitSpot (slot: number): { x: number; y: number } {
+        // Bias slightly west of center so the line sits under the pen, not the fire.
+        const spread = (slot - 1.5) * 38;
+        return {
+            x: this.x - 16 + spread,
+            y: this.y + 148
+        };
+    }
+
+    fireKeepOut (): { x: number; y: number; radius: number } {
+        const fire = this.fireSpot();
+        return {
+            x: fire.x,
+            y: fire.y,
+            radius: FIRE_KEEP_OUT_RADIUS
+        };
+    }
+
+    /**
+     * Soft additive wash around the pit. Visible by day; brightens through
+     * the night veil with a gentle flicker.
+     */
+    tickGlow (nightVeilAlpha: number, timeMs: number): void {
+        const night = Math.min(1.2, Math.max(0, nightVeilAlpha / NIGHT_VEIL_REF));
+        const flicker = 0.88
+            + 0.07 * Math.sin(timeMs * 0.011)
+            + 0.05 * Math.sin(timeMs * 0.027 + 1.7)
+            + 0.04 * Math.sin(timeMs * 0.053 + 0.4);
+
+        this.glowOuter.setAlpha((0.20 + night * 0.28) * flicker);
+        this.glowCore.setAlpha((0.30 + night * 0.38) * flicker);
+
+        const breathe = 0.97 + 0.05 * flicker;
+        this.glowOuter.setDisplaySize(GLOW_OUTER_SIZE * breathe, GLOW_OUTER_SIZE * breathe);
+        this.glowCore.setDisplaySize(GLOW_CORE_SIZE * breathe, GLOW_CORE_SIZE * (0.94 + 0.08 * flicker));
     }
 }
 
@@ -61,6 +156,35 @@ function ensureSheepfoldTexture (scene: Scene): void {
     scene.textures.addCanvas(TEXTURE_KEY, canvas);
 }
 
+function ensureCampfireGlowTexture (scene: Scene): void {
+    if (scene.textures.exists(GLOW_TEXTURE_KEY)) {
+        return;
+    }
+
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) {
+        throw new Error('Could not create campfire glow');
+    }
+
+    const cx = size / 2;
+    const cy = size / 2;
+    const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, cx);
+    gradient.addColorStop(0, 'rgba(255, 236, 200, 1)');
+    gradient.addColorStop(0.18, 'rgba(255, 190, 110, 0.75)');
+    gradient.addColorStop(0.42, 'rgba(232, 120, 48, 0.38)');
+    gradient.addColorStop(0.7, 'rgba(180, 70, 28, 0.12)');
+    gradient.addColorStop(1, 'rgba(80, 24, 8, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+
+    scene.textures.addCanvas(GLOW_TEXTURE_KEY, canvas);
+}
+
 function paintSheepfold (ctx: CanvasRenderingContext2D): void {
     const rng = mulberry32(0x5e1d);
 
@@ -76,8 +200,7 @@ function paintSheepfold (ctx: CanvasRenderingContext2D): void {
     const fold = { x: 118, y: 112, rx: 86, ry: 58 };
     drawStraw(ctx, fold, rng);
     drawFence(ctx, fold, rng);
-    drawTent(ctx, 228, 78);
-    drawCampfire(ctx, 232, 168);
+    drawCampfire(ctx, 245, 172, 0.55);
 }
 
 function drawStraw (
@@ -197,54 +320,11 @@ function drawRail (
     ctx.stroke();
 }
 
-function drawTent (ctx: CanvasRenderingContext2D, cx: number, cy: number): void {
-    const peak = { x: cx, y: cy - 46 };
-    const left = { x: cx - 38, y: cy + 18 };
-    const right = { x: cx + 40, y: cy + 22 };
-    const front = { x: cx + 4, y: cy + 26 };
-
-    ctx.fillStyle = 'rgba(58, 42, 24, 0.20)';
-    ctx.beginPath();
-    ctx.ellipse(cx + 2, cy + 22, 42, 12, -0.18, 0, Math.PI * 2);
-    ctx.fill();
-
-    fillPoly(ctx, [peak, left, front], '#d8c4a0');
-    fillPoly(ctx, [peak, front, right], '#a67c52');
-    fillPoly(ctx, [peak, { x: cx - 10, y: cy - 8 }, front], '#c4a574');
-
-    ctx.strokeStyle = '#7a5c3e';
-    ctx.lineWidth = 3;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(peak.x, peak.y);
-    ctx.lineTo(left.x - 4, left.y + 4);
-    ctx.moveTo(peak.x, peak.y);
-    ctx.lineTo(right.x + 4, right.y + 4);
-    ctx.stroke();
-
-    ctx.fillStyle = '#5c4634';
-    ctx.beginPath();
-    ctx.arc(peak.x, peak.y + 2, 3, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.strokeStyle = 'rgba(61, 44, 30, 0.55)';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.moveTo(left.x, left.y);
-    ctx.lineTo(left.x - 10, left.y + 8);
-    ctx.moveTo(right.x, right.y);
-    ctx.lineTo(right.x + 10, right.y + 6);
-    ctx.stroke();
-
-    ctx.fillStyle = '#3d2c1e';
-    fillDot(ctx, left.x - 10, left.y + 8, 2);
-    fillDot(ctx, right.x + 10, right.y + 6, 2);
-}
-
-function drawCampfire (ctx: CanvasRenderingContext2D, cx: number, cy: number): void {
+function drawCampfire (ctx: CanvasRenderingContext2D, cx: number, cy: number, scale = 1): void {
+    const s = scale;
     ctx.fillStyle = 'rgba(212, 120, 58, 0.28)';
     ctx.beginPath();
-    ctx.ellipse(cx, cy + 4, 22, 12, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy + 4 * s, 22 * s, 12 * s, 0, 0, Math.PI * 2);
     ctx.fill();
 
     const stones = [
@@ -254,41 +334,41 @@ function drawCampfire (ctx: CanvasRenderingContext2D, cx: number, cy: number): v
     for (const [dx, dy] of stones) {
         ctx.fillStyle = '#8a7a6a';
         ctx.beginPath();
-        ctx.ellipse(cx + dx, cy + dy, 6, 4, 0.2, 0, Math.PI * 2);
+        ctx.ellipse(cx + dx * s, cy + dy * s, 6 * s, 4 * s, 0.2, 0, Math.PI * 2);
         ctx.fill();
         ctx.fillStyle = '#c4b8a8';
         ctx.beginPath();
-        ctx.ellipse(cx + dx - 1, cy + dy - 1, 3, 2, 0.2, 0, Math.PI * 2);
+        ctx.ellipse(cx + (dx - 1) * s, cy + (dy - 1) * s, 3 * s, 2 * s, 0.2, 0, Math.PI * 2);
         ctx.fill();
     }
 
     ctx.strokeStyle = '#5c4634';
-    ctx.lineWidth = 5;
+    ctx.lineWidth = 5 * s;
     ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(cx - 12, cy + 2);
-    ctx.lineTo(cx + 11, cy - 4);
-    ctx.moveTo(cx + 10, cy + 4);
-    ctx.lineTo(cx - 9, cy - 5);
+    ctx.moveTo(cx - 12 * s, cy + 2 * s);
+    ctx.lineTo(cx + 11 * s, cy - 4 * s);
+    ctx.moveTo(cx + 10 * s, cy + 4 * s);
+    ctx.lineTo(cx - 9 * s, cy - 5 * s);
     ctx.stroke();
 
     ctx.strokeStyle = '#7a5c3e';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2 * s;
     ctx.beginPath();
-    ctx.moveTo(cx - 11, cy);
-    ctx.lineTo(cx + 9, cy - 5);
+    ctx.moveTo(cx - 11 * s, cy);
+    ctx.lineTo(cx + 9 * s, cy - 5 * s);
     ctx.stroke();
 
-    fillFlame(ctx, cx, cy - 8, 10, 22, '#d4783a');
-    fillFlame(ctx, cx - 6, cy - 4, 7, 16, '#e07a3a');
-    fillFlame(ctx, cx + 6, cy - 3, 6, 14, '#c45c2e');
-    fillFlame(ctx, cx, cy - 12, 5, 14, '#f0d5a8');
-    fillFlame(ctx, cx - 2, cy - 16, 3, 8, '#fff8ee');
+    fillFlame(ctx, cx, cy - 8 * s, 10 * s, 22 * s, '#d4783a');
+    fillFlame(ctx, cx - 6 * s, cy - 4 * s, 7 * s, 16 * s, '#e07a3a');
+    fillFlame(ctx, cx + 6 * s, cy - 3 * s, 6 * s, 14 * s, '#c45c2e');
+    fillFlame(ctx, cx, cy - 12 * s, 5 * s, 14 * s, '#f0d5a8');
+    fillFlame(ctx, cx - 2 * s, cy - 16 * s, 3 * s, 8 * s, '#fff8ee');
 
     ctx.fillStyle = 'rgba(247, 240, 228, 0.55)';
-    fillDot(ctx, cx + 8, cy - 26, 1.6);
-    fillDot(ctx, cx - 4, cy - 30, 1.2);
-    fillDot(ctx, cx + 3, cy - 34, 1.1);
+    fillDot(ctx, cx + 8 * s, cy - 26 * s, 1.6 * s);
+    fillDot(ctx, cx - 4 * s, cy - 30 * s, 1.2 * s);
+    fillDot(ctx, cx + 3 * s, cy - 34 * s, 1.1 * s);
 }
 
 function fillDot (ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
@@ -311,19 +391,6 @@ function fillFlame (
     ctx.quadraticCurveTo(x + w, y - h * 0.35, x + w * 0.35, y + 4);
     ctx.quadraticCurveTo(x, y + 8, x - w * 0.35, y + 4);
     ctx.quadraticCurveTo(x - w, y - h * 0.35, x, y - h);
-    ctx.fill();
-}
-
-function fillPoly (ctx: CanvasRenderingContext2D, points: { x: number; y: number }[], color: string): void {
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(points[0].x, points[0].y);
-
-    for (let i = 1; i < points.length; i++) {
-        ctx.lineTo(points[i].x, points[i].y);
-    }
-
-    ctx.closePath();
     ctx.fill();
 }
 

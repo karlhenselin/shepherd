@@ -15,6 +15,17 @@ export const WATER_ROW = 4;
 export const WORLD_WIDTH = REGION_COLS * REGION_WIDTH;
 export const WORLD_HEIGHT = REGION_ROWS * REGION_HEIGHT;
 
+/**
+ * Y-sort band for sheep / shepherd: above world props (~0–4), below night veil / UI (~15+).
+ * depth = CHAR_DEPTH_BASE + y * CHAR_DEPTH_PER_Y  → ~5..14 across the map.
+ */
+export const CHAR_DEPTH_BASE = 5;
+export const CHAR_DEPTH_PER_Y = 9 / WORLD_HEIGHT;
+
+export function characterDepth (y: number): number {
+    return CHAR_DEPTH_BASE + y * CHAR_DEPTH_PER_Y;
+}
+
 export function startCenter (): { x: number; y: number } {
     return regionCenter(START_COL, START_ROW);
 }

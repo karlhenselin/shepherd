@@ -2,6 +2,7 @@ import { Scene, GameObjects, Physics } from 'phaser';
 import { Shepherd } from './Shepherd';
 import { GrassPatch } from '../world/GrassPatch';
 import { WaterSource } from '../world/WaterSource';
+import { characterDepth } from '../world/constants';
 
 export const FOLLOW_SPEED = 150 * 0.95 * 0.95;
 const NOTICE_DISTANCE = 110;
@@ -20,6 +21,10 @@ const PET_COOLDOWN_MS = 13000;
 /** End post-pet scoot once shepherd–sheep separation reaches this (clear of PET_DISTANCE ~50). */
 const PET_SCOOT_SEPARATION = 90;
 const PET_SCOOT_MS = 750;
+/** Past the keep-out rim so sheep don't freeze just inside the boundary. */
+const KEEP_OUT_CLEARANCE = 14;
+/** Soft radial nudge per frame while exiting a keep-out (avoids rim-slide stalls). */
+const KEEP_OUT_NUDGE = 8;
 
 const SHEEP_TINT: Record<string, number> = {
     Snowball: 0xf4f7ff,
@@ -65,12 +70,11 @@ export class Sheep {
         ensureSheepShadow(scene);
 
         this.shadow = scene.add.image(x, y + SHADOW_OFFSET, 'sheep-shadow');
-        this.shadow.setDepth(4);
 
         this.sprite = scene.physics.add.sprite(x, y, 'sheep');
-        this.sprite.setDepth(5);
         this.sprite.setDisplaySize(SHEEP_SIZE, SHEEP_SIZE);
         this.sprite.setTint(SHEEP_TINT[name] ?? 0xffffff);
+        this.placeShadow();
 
         this.body = this.sprite.body as Physics.Arcade.Body;
         this.body.setCollideWorldBounds(true);
@@ -118,9 +122,15 @@ export class Sheep {
         this.body.setImmovable(true);
     }
 
+    /** Block walk-into pets for a while (find celebration bypasses `canBePetted`). */
+    deferWalkIntoPetting (durationMs: number): void {
+        this.nextPetAt = Math.max(this.nextPetAt, this.scene.time.now + durationMs);
+    }
+
     beginFollowing (): void {
         this.discovered = true;
         this.mood = 'following';
+        this.rescueWait = null;
         this.body.setImmovable(false);
         this.body.setVelocity(0, 0);
     }
@@ -154,6 +164,7 @@ export class Sheep {
         this.sprite.setAngle(0);
         this.sprite.setTint(SHEEP_TINT[this.name] ?? 0xffffff);
         this.shadow.setAlpha(1);
+        this.rescueWait = null;
         this.beginFollowing();
         this.placeShadow();
     }
@@ -170,6 +181,7 @@ export class Sheep {
         this.body.setVelocity(0, 0);
     }
 
+    /** Leave hole-aside sit and resume trail follow when mood allows. */
     endRescueWait (): void {
         if (!this.rescueWait) {
             return;
@@ -177,7 +189,9 @@ export class Sheep {
 
         this.rescueWait = null;
         this.sprite.setAngle(0);
+        this.body.setVelocity(0, 0);
 
+        // Sit used immovable=true; unlock so trail follow can move again.
         if (this.mood === 'following') {
             this.body.setImmovable(false);
         }
@@ -187,6 +201,15 @@ export class Sheep {
 
     markDiscovered (): void {
         this.discovered = true;
+    }
+
+    get isPenned (): boolean {
+        return this.mood === 'penned';
+    }
+
+    /** Penned and finished walking to the rest spot. */
+    get isSettledInPen (): boolean {
+        return this.mood === 'penned' && this.penTarget === null;
     }
 
     enterPen (x: number, y: number): void {
@@ -210,9 +233,16 @@ export class Sheep {
         this.placeShadow();
     }
 
-    leavePen (): void {
+    /** Leave penned mood; optional world position (e.g. outside the fold after dawn). */
+    leavePen (x?: number, y?: number): void {
         this.beginFollowing();
         this.penTarget = null;
+
+        if (x !== undefined && y !== undefined) {
+            this.sprite.setPosition(x, y);
+            this.body.setVelocity(0, 0);
+            this.placeShadow();
+        }
     }
 
     update (
@@ -220,7 +250,7 @@ export class Sheep {
         water: WaterSource[],
         grass: GrassPatch[],
         huddle = false,
-        keepOut: KeepOutZone | null = null
+        keepOuts: KeepOutZone[] = []
     ): SheepEvent {
         const now = this.scene.time.now;
         const dist = Math.hypot(shepherd.sprite.x - this.sprite.x, shepherd.sprite.y - this.sprite.y);
@@ -236,7 +266,7 @@ export class Sheep {
         }
 
         if (this.isScooting) {
-            this.tickScoot(now, shepherd, keepOut);
+            this.tickScoot(now, shepherd, keepOuts);
             return null;
         }
 
@@ -334,8 +364,14 @@ export class Sheep {
 
         let { targetX, targetY } = this.trailTarget(shepherd, huddle);
 
-        if (keepOut) {
-            const pushed = pushOutsideKeepOut(targetX, targetY, keepOut);
+        if (keepOuts.length > 0) {
+            // Inside or on the rim: scoot radially out — do not trail-follow into a trap.
+            if (isInsideOrOnKeepOut(this.sprite.x, this.sprite.y, keepOuts)) {
+                this.scootOutOfKeepOuts(keepOuts, now);
+                return null;
+            }
+
+            const pushed = pushOutsideKeepOuts(targetX, targetY, keepOuts, KEEP_OUT_CLEARANCE);
             targetX = pushed.x;
             targetY = pushed.y;
         }
@@ -394,7 +430,12 @@ export class Sheep {
         }
     }
 
-    private tickScoot (now: number, shepherd: Shepherd, keepOut: KeepOutZone | null = null): void {
+    private tickScoot (now: number, shepherd: Shepherd, keepOuts: KeepOutZone[] = []): void {
+        if (keepOuts.length > 0 && isInsideOrOnKeepOut(this.sprite.x, this.sprite.y, keepOuts)) {
+            this.scootOutOfKeepOuts(keepOuts, now);
+            return;
+        }
+
         const shepherdX = shepherd.sprite.x;
         const shepherdY = shepherd.sprite.y;
         let dx = this.sprite.x - shepherdX;
@@ -420,13 +461,42 @@ export class Sheep {
         let targetX = shepherdX + (dx / len) * (PET_SCOOT_SEPARATION + 20);
         let targetY = shepherdY + (dy / len) * (PET_SCOOT_SEPARATION + 20);
 
-        if (keepOut) {
-            const pushed = pushOutsideKeepOut(targetX, targetY, keepOut);
+        if (keepOuts.length > 0) {
+            const pushed = pushOutsideKeepOuts(targetX, targetY, keepOuts, KEEP_OUT_CLEARANCE);
             targetX = pushed.x;
             targetY = pushed.y;
         }
 
         this.moveToward(targetX, targetY, FOLLOW_SPEED);
+        this.sprite.setAngle(Math.sin(now / 90) * WADDLE_DEG);
+        this.faceVelocity();
+        this.placeShadow();
+    }
+
+    /**
+     * Leave a keep-out radially each frame until clear of the rim.
+     * Nudge + velocity so sheep don't stall on the boundary with a follow stop.
+     */
+    private scootOutOfKeepOuts (keepOuts: KeepOutZone[], now: number): void {
+        const exit = pushOutsideKeepOuts(
+            this.sprite.x,
+            this.sprite.y,
+            keepOuts,
+            KEEP_OUT_CLEARANCE
+        );
+        const dx = exit.x - this.sprite.x;
+        const dy = exit.y - this.sprite.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist > 0.5) {
+            const nudge = Math.min(dist, KEEP_OUT_NUDGE);
+            this.sprite.setPosition(
+                this.sprite.x + (dx / dist) * nudge,
+                this.sprite.y + (dy / dist) * nudge
+            );
+        }
+
+        this.moveToward(exit.x, exit.y, FOLLOW_SPEED);
         this.sprite.setAngle(Math.sin(now / 90) * WADDLE_DEG);
         this.faceVelocity();
         this.placeShadow();
@@ -495,6 +565,9 @@ export class Sheep {
     }
 
     private placeShadow (): void {
+        const depth = characterDepth(this.sprite.y);
+        this.sprite.setDepth(depth);
+        this.shadow.setDepth(depth - 0.01);
         this.shadow.setPosition(this.sprite.x, this.sprite.y + SHADOW_OFFSET);
         this.shadow.setFlipX(this.sprite.flipX);
     }
@@ -541,21 +614,50 @@ export class Sheep {
     }
 }
 
-/** Push a point to the rim if it falls inside the keep-out circle. */
-function pushOutsideKeepOut (x: number, y: number, zone: KeepOutZone): { x: number; y: number } {
+function isInsideOrOnKeepOut (x: number, y: number, zones: KeepOutZone[]): boolean {
+    return zones.some((zone) => Math.hypot(x - zone.x, y - zone.y) <= zone.radius);
+}
+
+/**
+ * Push a point outside any keep-out circle.
+ * @param margin Extra pixels past the rim (sheep follow targets / exit aims).
+ */
+export function pushOutsideKeepOuts (
+    x: number,
+    y: number,
+    zones: KeepOutZone[],
+    margin = 0
+): { x: number; y: number } {
+    let point = { x, y };
+
+    for (const zone of zones) {
+        point = pushOutsideKeepOut(point.x, point.y, zone, margin);
+    }
+
+    return point;
+}
+
+/** Push a point outside the keep-out circle (optionally past the rim). */
+function pushOutsideKeepOut (
+    x: number,
+    y: number,
+    zone: KeepOutZone,
+    margin = 0
+): { x: number; y: number } {
+    const outer = zone.radius + margin;
     const dx = x - zone.x;
     const dy = y - zone.y;
     const dist = Math.hypot(dx, dy);
 
-    if (dist >= zone.radius) {
+    if (dist >= outer) {
         return { x, y };
     }
 
     if (dist < 1) {
-        return { x: zone.x + zone.radius, y: zone.y };
+        return { x: zone.x + outer, y: zone.y };
     }
 
-    const scale = zone.radius / dist;
+    const scale = outer / dist;
     return { x: zone.x + dx * scale, y: zone.y + dy * scale };
 }
 

@@ -1,4 +1,6 @@
 import { Scene, GameObjects, Physics, Input, Math as PMath } from 'phaser';
+import { characterDepth } from '../world/constants';
+import { KeepOutZone, pushOutsideKeepOuts } from './Sheep';
 
 const SPEED = 180;
 const ARRIVE_DISTANCE = 8;
@@ -25,17 +27,17 @@ export class Shepherd {
     /** Unit vector of last non-zero velocity (flock trails opposite this). */
     private moveDirX = 1;
     private moveDirY = 0;
+    private keepOuts: KeepOutZone[] = [];
 
     constructor (scene: Scene, x: number, y: number) {
         ensureShepherdTextures(scene);
         ensureShepherdShadow(scene);
 
         this.shadow = scene.add.image(x, y + SHADOW_OFFSET, 'shepherd-shadow');
-        this.shadow.setDepth(5);
 
         this.sprite = scene.physics.add.sprite(x, y, 'shepherd');
-        this.sprite.setDepth(6);
         this.body = this.sprite.body as Physics.Arcade.Body;
+        this.placeShadow();
         this.body.setCollideWorldBounds(true);
         this.body.setCircle(14, 8, 10);
 
@@ -53,7 +55,7 @@ export class Shepherd {
                 return;
             }
 
-            this.target = new PMath.Vector2(pointer.worldX, pointer.worldY);
+            this.target = this.clampToKeepOuts(pointer.worldX, pointer.worldY);
         });
     }
 
@@ -82,6 +84,24 @@ export class Shepherd {
         return { x: this.moveDirX, y: this.moveDirY };
     }
 
+    /** Point the trail heading (flock follows opposite this). */
+    faceToward (x: number, y: number): void {
+        const dx = x - this.sprite.x;
+        const dy = y - this.sprite.y;
+        const len = Math.hypot(dx, dy);
+
+        if (len < 1) {
+            return;
+        }
+
+        this.moveDirX = dx / len;
+        this.moveDirY = dy / len;
+
+        if (Math.abs(dx) > 4) {
+            this.sprite.setFlipX(dx < 0);
+        }
+    }
+
     equipStaff (equipped = true): void {
         this.staffEquipped = equipped;
         this.applyTexture();
@@ -108,7 +128,7 @@ export class Shepherd {
 
         this.guided = true;
         this.arriveCallback = onArrive;
-        this.target = new PMath.Vector2(x, y);
+        this.target = this.clampToKeepOuts(x, y);
         this.body.setVelocity(0, 0);
     }
 
@@ -169,7 +189,9 @@ export class Shepherd {
         this.sprite.setTexture(key);
     }
 
-    update (): void {
+    update (keepOuts: KeepOutZone[] = []): void {
+        this.keepOuts = keepOuts;
+
         if (this.lyingDown) {
             this.body.setVelocity(0, 0);
             this.placeShadow();
@@ -199,6 +221,7 @@ export class Shepherd {
                 this.body.setVelocity(vx * SPEED, vy * SPEED);
                 this.body.velocity.normalize().scale(SPEED);
                 this.faceVelocity();
+                this.applyKeepOutPush();
                 this.placeShadow();
                 return;
             }
@@ -211,6 +234,7 @@ export class Shepherd {
             if (Math.hypot(dx, dy) < ARRIVE_DISTANCE) {
                 this.target = null;
                 this.body.setVelocity(0, 0);
+                this.applyKeepOutPush();
                 this.placeShadow();
                 const arrived = this.arriveCallback;
                 this.arriveCallback = null;
@@ -221,12 +245,55 @@ export class Shepherd {
             this.body.setVelocity(dx, dy);
             this.body.velocity.normalize().scale(SPEED);
             this.faceVelocity();
+            this.applyKeepOutPush();
             this.placeShadow();
             return;
         }
 
         this.body.setVelocity(0, 0);
+        this.applyKeepOutPush();
         this.placeShadow();
+    }
+
+    private clampToKeepOuts (x: number, y: number): PMath.Vector2 {
+        const point = pushOutsideKeepOuts(x, y, this.keepOuts);
+        return new PMath.Vector2(point.x, point.y);
+    }
+
+    /** If the shepherd is inside a keep-out, slide to the rim and stop inward motion. */
+    private applyKeepOutPush (): void {
+        if (this.keepOuts.length === 0) {
+            return;
+        }
+
+        const outside = pushOutsideKeepOuts(this.sprite.x, this.sprite.y, this.keepOuts);
+
+        if (outside.x === this.sprite.x && outside.y === this.sprite.y) {
+            return;
+        }
+
+        this.sprite.setPosition(outside.x, outside.y);
+
+        for (const zone of this.keepOuts) {
+            const dx = this.sprite.x - zone.x;
+            const dy = this.sprite.y - zone.y;
+            const dist = Math.hypot(dx, dy);
+
+            if (dist < 1) {
+                continue;
+            }
+
+            const inward = (this.body.velocity.x * dx + this.body.velocity.y * dy) / dist;
+
+            if (inward < 0) {
+                this.body.velocity.x -= (dx / dist) * inward;
+                this.body.velocity.y -= (dy / dist) * inward;
+            }
+        }
+
+        if (this.target) {
+            this.target = this.clampToKeepOuts(this.target.x, this.target.y);
+        }
     }
 
     private endPetting (): void {
@@ -252,6 +319,9 @@ export class Shepherd {
     }
 
     private placeShadow (): void {
+        const depth = characterDepth(this.sprite.y);
+        this.sprite.setDepth(depth);
+        this.shadow.setDepth(depth - 0.01);
         this.shadow.setPosition(this.sprite.x, this.sprite.y + SHADOW_OFFSET);
         this.shadow.setFlipX(this.sprite.flipX);
     }
