@@ -1,9 +1,3 @@
 replace the leading _ with leading X tasks are complete.
-_ create better grass sprite
-_ update cheat selection if it is out of date.
-_ When you free a sheep from the thorns, push them away from the thorns 60px and pause the thorns effect for 4 seconds.
-_ make the direction arrows further from the center of the screen as they overlap the player.
-_ the sheep are just a little too close to the player when following. increase the distance by 15%.
-_ Milo and biscuit spawned in the same place at the same time basically, and both were off the screen, and there was no hole that biscuit was in. Make them spawn in different areas, and don't have the 2 finds right in a row. Do something else in between. Fix the hole, don't spawn anything within 100px of the edge of the map.
-_ 
-_ 
+_ add a eaten food plant sprite to replace the food with after sheep eat it. Make sheep walk up to one to eat from when they eat.
+_ when you find a Bible gem while other talking is playing, pick it up immediately. Play the gem sound over the talking. queue the verse.

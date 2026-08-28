@@ -34,7 +34,7 @@ export class CheatScene extends Scene {
         }).setOrigin(0.5);
 
         CHEAT_SPOTS.forEach((spot, index) => {
-            const y = 118 + index * 32;
+            const y = 112 + index * 28;
             const button = this.add.text(cx, y, spot.label, {
                 fontFamily: 'Georgia, Palatino, serif',
                 fontSize: '20px',

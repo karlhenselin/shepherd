@@ -1,7 +1,7 @@
 import { GameObjects, Scene } from 'phaser';
 import { Shepherd } from '../entities/Shepherd';
 
-const OFFSET = 48;
+const OFFSET = 110;
 const HIDE_PADDING = 90;
 
 export class LostSheepHint {

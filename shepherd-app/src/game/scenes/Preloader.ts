@@ -34,6 +34,7 @@ export class Preloader extends Scene
         this.load.image('shepherd-kneel-staff-white', 'shepherd-kneel-staff-white.png');
         this.load.image('water-source', 'water.png');
         this.load.image('thorns', 'thorns.png');
+        this.load.image('grass-tuft', 'grass-tuft.png');
         this.load.audio('exhale', 'audio/exhale.mp3');
         this.load.audio('wanderlust', 'music/wanderlust-justin-lee-main-version-29117-01-40.mp3');
         this.load.audio('wonders-of-nature', 'music/wonders-of-nature-roger-gabalda-main-version-01-31-11044.mp3');

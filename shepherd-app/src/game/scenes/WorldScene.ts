@@ -18,7 +18,7 @@ import { GrassPatch, placePasture } from '../world/GrassPatch';
 import { WaterSource } from '../world/WaterSource';
 import { Sheepfold } from '../world/Sheepfold';
 import { Hole, HOLE_KEEP_OUT_RADIUS } from '../world/Hole';
-import { Thorns, placeThorns } from '../world/Thorns';
+import { Thorns, THORN_SNARE_RADIUS, placeThorns } from '../world/Thorns';
 import { StaffPickup } from '../world/StaffPickup';
 import { BibleGem, placeBibleGems, spawnBibleGemAway } from '../world/BibleGem';
 import { watercolorWorld } from '../world/watercolorWorld';
@@ -57,6 +57,8 @@ const BANDAGE_RANGE = 100;
 const BANDAGE_KNEEL_MS = 2000;
 /** Apply heal / scripture a beat into the kneel. */
 const BANDAGE_HEAL_AT_MS = 650;
+/** After a rescue, thorns stay off until the shepherd walks this far. */
+const THORN_REARM_WALK = 300;
 const HOLE_ASIDE_DIST = 118;
 const HOLE_ENTER_NUDGE = 16;
 /** Pause stray teleport / lag warning and walk-into petting while shepherd is this close to the hole. */
@@ -69,7 +71,7 @@ const NIGHT_VEIL_DEEPEN = 1.10;
 const NIGHT_DEEPEN_MS = 60_000;
 const NIGHT_FADE_IN_MS = 2800;
 /**
- * Restored following sheep ring radius. Must stay well beyond FOLLOW_DISTANCE (56) +
+ * Restored following sheep ring radius. Must stay well beyond FOLLOW_DISTANCE (64) +
  * PET_DISTANCE (~50) so sheep do not sit in walk-into pet range on load.
  */
 const RESTORE_FOLLOW_RING = 200;
@@ -102,6 +104,9 @@ export class WorldScene extends Scene {
     private sheepfold: Sheepfold | null = null;
     private hole: Hole | null = null;
     private thorns: Thorns[] = [];
+    private thornsArmed = true;
+    /** Set after a thorn rescue; snares stay off until the shepherd walks `THORN_REARM_WALK`. */
+    private thornsRearmFrom: { x: number; y: number } | null = null;
     private wolf: Wolf | null = null;
     private staffPickup: StaffPickup | null = null;
     private gems: BibleGem[] = [];
@@ -137,6 +142,8 @@ export class WorldScene extends Scene {
     private nightFadeInMs = 0;
     private sleepVeil!: GameObjects.Rectangle;
     private walkFrom: { x: number; y: number } | null = null;
+    /** After finding Milo, walk a bit before Biscuit appears in the hole. */
+    private holeWalkFrom: { x: number; y: number } | null = null;
     /** Walk-into petting allowed once `time.now` reaches this (set on create). */
     private pettingReadyAt = 0;
     /**
@@ -353,6 +360,7 @@ export class WorldScene extends Scene {
         this.updateBandageButton();
         this.tickPetting();
         this.maybeSpeakRighteousness();
+        this.maybeSpawnHoleSheep();
         this.maybeHowl();
         this.maybePickupStaff();
         this.maybeCollectGem();
@@ -480,6 +488,16 @@ export class WorldScene extends Scene {
             return;
         }
 
+        if (sheep.name === 'Milo') {
+            this.playLines([
+                `${sheep.name}! I found you!`,
+                `${sheep.name} is nervous. Stay together.`
+            ], () => {
+                this.beginHoleWatch();
+            });
+            return;
+        }
+
         this.playLines([
             `${sheep.name}! I found you!`
         ], () => {
@@ -571,6 +589,12 @@ export class WorldScene extends Scene {
     }
 
     private flockCue (): string {
+        const snared = this.flock.find((sheep) => sheep.hurt && sheep.snaredInThorns);
+
+        if (snared) {
+            return `Help ${snared.name}!`;
+        }
+
         const eating = this.flock.find((sheep) => sheep.mood === 'eating');
 
         if (eating) {
@@ -600,9 +624,7 @@ export class WorldScene extends Scene {
         const hurt = this.flock.find((sheep) => sheep.hurt && sheep.discovered);
 
         if (hurt) {
-            return hurt.snaredInThorns
-                ? `Free ${hurt.name} from the thorns.`
-                : `Bandage ${hurt.name}.`;
+            return `Bandage ${hurt.name}.`;
         }
 
         if (this.heardJohn109 && !this.heardCorinthians) {
@@ -841,6 +863,9 @@ export class WorldScene extends Scene {
         else if (this.shouldHaveLostSheep(save)) {
             this.spawnNextSheep();
         }
+        else if (this.shouldAwaitHoleSheep(save)) {
+            this.beginHoleWatch();
+        }
 
         if (this.heardPsalm4a && !this.heardCorinthians) {
             this.applyNight(false);
@@ -886,6 +911,14 @@ export class WorldScene extends Scene {
             || (this.heardPsalm2b && save.foundCount < 3 && save.nextNames.length > 0);
     }
 
+    private shouldAwaitHoleSheep (save: GameSave): boolean {
+        return this.heardPsalm2b
+            && !this.heardPsalm3
+            && save.foundCount >= 3
+            && save.nextNames.includes('Biscuit')
+            && !save.waitingName;
+    }
+
     private resetRun (): void {
         this.flock = [];
         this.grass = [];
@@ -913,12 +946,15 @@ export class WorldScene extends Scene {
         this.sheepfold = null;
         this.hole = null;
         this.thorns = [];
+        this.thornsArmed = true;
+        this.thornsRearmFrom = null;
         this.dismissWolf();
         this.staffPickup = null;
         this.gems = [];
         this.foundGems = [];
         this.lastCheckpoint = null;
         this.walkFrom = null;
+        this.holeWalkFrom = null;
         this.strayReadyAt = 0;
         this.pettingReadyAt = 0;
         this.loadPetsLocked = false;
@@ -1043,20 +1079,49 @@ export class WorldScene extends Scene {
     }
 
     private tickThorns (): void {
-        if (this.scriptPlaying || this.bandageRescuing || this.shepherd.isLyingDown) {
+        this.maybeRearmThorns();
+
+        if (!this.thornsArmed || this.scriptPlaying || this.bandageRescuing || this.shepherd.isLyingDown) {
             return;
         }
 
+        const sx = this.shepherd.sprite.x;
+        const sy = this.shepherd.sprite.y;
+
         for (const sheep of this.flock) {
-            if (sheep.mood !== 'following' || sheep.hurt || sheep.isBusy) {
+            if (sheep.mood !== 'following' || sheep.hurt || sheep.isBusy || sheep.isRescueWaiting) {
                 continue;
             }
 
-            if (this.thorns.some((patch) => patch.contains(sheep.sprite.x, sheep.sprite.y))) {
-                sheep.snareInThorns();
-                this.showCue(`${sheep.name} is caught in the thorns.`);
-                return;
+            const patch = this.thorns.find((thorn) => thorn.contains(sheep.sprite.x, sheep.sprite.y));
+
+            // Shepherd can walk the flock through; only snare sheep left in a bush.
+            if (!patch || patch.contains(sx, sy)) {
+                continue;
             }
+
+            sheep.snareInThorns();
+            this.thornsArmed = false;
+            this.thornsRearmFrom = null;
+            this.showCue(`Help ${sheep.name}!`);
+            return;
+        }
+    }
+
+    /** After a rescue, turn snares back on once the shepherd has walked far enough. */
+    private maybeRearmThorns (): void {
+        if (this.thornsArmed || !this.thornsRearmFrom) {
+            return;
+        }
+
+        const dist = Math.hypot(
+            this.shepherd.sprite.x - this.thornsRearmFrom.x,
+            this.shepherd.sprite.y - this.thornsRearmFrom.y
+        );
+
+        if (dist >= THORN_REARM_WALK) {
+            this.thornsArmed = true;
+            this.thornsRearmFrom = null;
         }
     }
 
@@ -1065,7 +1130,8 @@ export class WorldScene extends Scene {
         this.bandageButton.setVisible(false);
         this.stageFlockAside(hurt.sprite.x, hurt.sprite.y, hurt);
 
-        this.shepherd.guideTo(hurt.sprite.x, hurt.sprite.y, () => {
+        const stand = this.thornRescueStand(hurt);
+        this.shepherd.guideTo(stand.x, stand.y, () => {
             this.shepherd.beginPetting(hurt.sprite.x, hurt.sprite.y, BANDAGE_KNEEL_MS);
 
             this.time.delayedCall(BANDAGE_HEAL_AT_MS, () => {
@@ -1074,6 +1140,7 @@ export class WorldScene extends Scene {
                 }
 
                 hurt.heal();
+                this.shepherd.clearGuidance();
                 this.playLines([`You free ${hurt.name} from the thorns.`], () => {
                     this.finishThornRescue();
                 });
@@ -1082,6 +1149,8 @@ export class WorldScene extends Scene {
     }
 
     private finishThornRescue (): void {
+        this.shepherd.clearGuidance();
+
         for (const sheep of this.flock) {
             sheep.endRescueWait();
 
@@ -1091,6 +1160,47 @@ export class WorldScene extends Scene {
         }
 
         this.bandageRescuing = false;
+        this.thornsRearmFrom = {
+            x: this.shepherd.sprite.x,
+            y: this.shepherd.sprite.y
+        };
+    }
+
+    /** Stand just outside the bramble so the shepherd never has to enter it. */
+    private thornRescueStand (hurt: Sheep): { x: number; y: number } {
+        const patch = this.nearestThorn(hurt.sprite.x, hurt.sprite.y);
+        const fromX = this.shepherd.sprite.x;
+        const fromY = this.shepherd.sprite.y;
+
+        if (!patch) {
+            return { x: hurt.sprite.x, y: hurt.sprite.y };
+        }
+
+        const dx = fromX - patch.x;
+        const dy = fromY - patch.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const radius = THORN_SNARE_RADIUS + 18;
+
+        return {
+            x: patch.x + (dx / dist) * radius,
+            y: patch.y + (dy / dist) * radius
+        };
+    }
+
+    private nearestThorn (x: number, y: number): Thorns | null {
+        let nearest: Thorns | null = null;
+        let best = Infinity;
+
+        for (const thorn of this.thorns) {
+            const dist = Math.hypot(x - thorn.x, y - thorn.y);
+
+            if (dist < best) {
+                best = dist;
+                nearest = thorn;
+            }
+        }
+
+        return nearest;
     }
 
     private tryBandage (): void {
@@ -1298,6 +1408,38 @@ export class WorldScene extends Scene {
             x: this.shepherd.sprite.x,
             y: this.shepherd.sprite.y
         };
+    }
+
+    private beginHoleWatch (): void {
+        this.holeWalkFrom = {
+            x: this.shepherd.sprite.x,
+            y: this.shepherd.sprite.y
+        };
+    }
+
+    private maybeSpawnHoleSheep (): void {
+        if (
+            this.scriptPlaying
+            || this.hole
+            || !this.holeWalkFrom
+            || this.heardPsalm3
+            || this.nextNames[0] !== 'Biscuit'
+        ) {
+            return;
+        }
+
+        const dist = Math.hypot(
+            this.shepherd.sprite.x - this.holeWalkFrom.x,
+            this.shepherd.sprite.y - this.holeWalkFrom.y
+        );
+
+        if (dist < WALK_A_BIT) {
+            return;
+        }
+
+        this.holeWalkFrom = null;
+        this.spawnNextSheep();
+        this.showCue('A sheep is missing.');
     }
 
     private maybeSpeakRighteousness (): void {
@@ -1524,7 +1666,11 @@ export class WorldScene extends Scene {
         this.dismissWolf();
         this.shepherd.lieDown(gate.x, gate.y);
         this.playLines([john10Line(9)], () => {
-            this.beginMystery();
+            this.time.delayedCall(1000, () => {
+                if (this.sys.isActive()) {
+                    this.beginMystery();
+                }
+            });
         });
     }
 

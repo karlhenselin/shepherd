@@ -16,6 +16,7 @@ export const CHEAT_SPOTS: CheatSpot[] = [
     { label: 'Psalm 23:2 / Isaiah 53:6', save: psalm232() },
     { label: 'Found second sheep — thirsty', save: foundSecond() },
     { label: 'Psalm 23:2b — quiet waters', save: psalm232b() },
+    { label: 'Found Milo — stay together', save: foundMilo() },
     { label: 'Hurt sheep in the hole', save: hurtSheep() },
     { label: 'Psalm 23:3 — restored', save: psalm233() },
     { label: 'Psalm 23:3b — paths of righteousness', save: psalm233b() },
@@ -108,6 +109,16 @@ function psalm232b (): GameSave {
     });
 }
 
+function foundMilo (): GameSave {
+    return blank('found-sheep', {
+        ...flockThrough(3),
+        heardPsalm1: true,
+        heardPsalm2: true,
+        heardPsalm2b: true,
+        player: regionCenter(WATER_COL, WATER_ROW)
+    });
+}
+
 function hurtSheep (): GameSave {
     return blank('hurt-sheep', {
         foundCount: 3,
@@ -146,7 +157,7 @@ function atPen (checkpoint: StoryCheckpoint, extra: Partial<GameSave> = {}): Gam
     return afterRescue(checkpoint, {
         heardPsalm3b: true,
         heardPsalm4a: true,
-        player: { x: pen.x + 52, y: pen.y + 28 },
+        player: { x: pen.x - 40, y: pen.y + 64 },
         pen,
         ...extra
     });

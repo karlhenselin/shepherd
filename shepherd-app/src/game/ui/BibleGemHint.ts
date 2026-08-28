@@ -2,7 +2,7 @@ import { GameObjects, Scene } from 'phaser';
 import { Shepherd } from '../entities/Shepherd';
 
 /** Closer to the shepherd than the lost-sheep hint so both can show at once. */
-const OFFSET = 34;
+const OFFSET = 88;
 const HIDE_PADDING = 90;
 
 export class BibleGemHint {

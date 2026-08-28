@@ -50,15 +50,19 @@ export function findPointAwayFromAll (
     minFromOthers: number
 ): { x: number; y: number } {
     const origin = points[0] ?? startCenter();
-    const pad = 80;
+    const pad = 100;
 
-    for (let ring = 0; ring < 20; ring++) {
+    for (let ring = 0; ring < 28; ring++) {
         const dist = minFromOrigin + ring * 140;
 
-        for (let i = 0; i < 20; i++) {
-            const angle = (i / 20) * Math.PI * 2 + ring * 0.35;
+        for (let i = 0; i < 24; i++) {
+            const angle = (i / 24) * Math.PI * 2 + ring * 0.35;
             const x = clamp(origin.x + Math.cos(angle) * dist, pad, WORLD_WIDTH - pad);
             const y = clamp(origin.y + Math.sin(angle) * dist, pad, WORLD_HEIGHT - pad);
+
+            if (x <= pad + 1 || y <= pad + 1 || x >= WORLD_WIDTH - pad - 1 || y >= WORLD_HEIGHT - pad - 1) {
+                continue;
+            }
             const farFromAll = points.every((point) => Math.hypot(point.x - x, point.y - y) >= minFromOthers);
 
             if (farFromAll) {
@@ -67,7 +71,10 @@ export function findPointAwayFromAll (
         }
     }
 
-    return { x: origin.x + minFromOrigin, y: origin.y };
+    return {
+        x: clamp(origin.x + minFromOrigin, pad, WORLD_WIDTH - pad),
+        y: clamp(origin.y, pad, WORLD_HEIGHT - pad)
+    };
 }
 
 export function farthestCornerFrom (point: { x: number; y: number }): { x: number; y: number } {

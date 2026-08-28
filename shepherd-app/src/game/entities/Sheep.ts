@@ -6,8 +6,8 @@ import { characterDepth } from '../world/constants';
 
 export const FOLLOW_SPEED = 150 * 0.95 * 0.95;
 const NOTICE_DISTANCE = 110;
-export const FOLLOW_DISTANCE = 56;
-const NIGHT_FOLLOW_DISTANCE = 36;
+export const FOLLOW_DISTANCE = 64;
+const NIGHT_FOLLOW_DISTANCE = 41;
 /** Side-by-side spread along the trail (perpendicular to travel). */
 const FOLLOW_LATERAL = 28;
 const DRINK_MS = 2600;

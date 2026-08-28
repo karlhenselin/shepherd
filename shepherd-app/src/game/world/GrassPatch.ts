@@ -8,6 +8,7 @@ export class GrassPatch {
     constructor (scene: Scene, x: number, y: number) {
         ensureGrassTexture(scene);
         this.sprite = scene.add.sprite(x, y, 'grass-tuft');
+        this.sprite.setDisplaySize(56, 56);
         this.sprite.setDepth(3);
     }
 
