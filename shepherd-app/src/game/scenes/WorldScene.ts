@@ -64,6 +64,8 @@ const HOLE_ENTER_NUDGE = 16;
 /** Pause stray teleport / lag warning and walk-into petting while shepherd is this close to the hole. */
 const HOLE_PROXIMITY_PAUSE = 200;
 const WALK_A_BIT = 420;
+/** After the flock is settled in the pen, wait this long before lying down. */
+const PEN_SLEEP_DELAY_MS = 1000;
 /** Pause after the scare beat before speaking Psalm 23:4b. */
 const FEAR_NO_EVIL_DELAY_MS = 3000;
 const NIGHT_VEIL_ALPHA = 0.55;
@@ -139,6 +141,8 @@ export class WorldScene extends Scene {
     private heardJohn102 = false;
     private heardJohn109 = false;
     private heardCorinthians = false;
+    /** When `time.now` reaches this, the shepherd may lie down (0 = flock not settled). */
+    private penSleepAt = 0;
     private nightStarted = false;
     private nightDarkAt = 0;
     private nightFadeInMs = 0;
@@ -311,12 +315,14 @@ export class WorldScene extends Scene {
 
     update (_time: number, delta: number): void {
         const keepOuts = this.worldKeepOuts();
-        this.shepherd.update(keepOuts);
+        this.shepherd.update(this.shepherdKeepOuts(keepOuts));
         tickWalkSound(this, this.shepherd.isMoving && !this.shepherd.isLyingDown);
         watercolorWorld().rainIntoView(this);
         watercolorWorld().tick(this, this.time.now);
 
         this.tryUnlockLoadPetting();
+
+        const flockKeepOuts = this.flockKeepOuts(keepOuts);
 
         for (const sheep of this.flock) {
             // Hold followers at spawn until the shepherd moves (restore ring / dawn gather).
@@ -324,7 +330,7 @@ export class WorldScene extends Scene {
                 continue;
             }
 
-            const event = sheep.update(this.shepherd, this.water, this.grass, this.nightStarted, keepOuts);
+            const event = sheep.update(this.shepherd, this.water, this.grass, this.nightStarted, flockKeepOuts);
 
             if (event === 'found') {
                 this.onFoundSheep(sheep);
@@ -613,6 +619,12 @@ export class WorldScene extends Scene {
 
         if (drinking) {
             return `${drinking.name} is drinking.`;
+        }
+
+        const wandered = this.flock.find((sheep) => sheep.mood === 'waiting' && sheep.discovered);
+
+        if (wandered) {
+            return `${wandered.name} wandered off.`;
         }
 
         if (this.flock.some((sheep) => sheep.mood === 'waiting' || (sheep.hurt && !sheep.discovered))) {
@@ -969,6 +981,7 @@ export class WorldScene extends Scene {
         this.walkFrom = null;
         this.holeWalkFrom = null;
         this.strayReadyAt = 0;
+        this.penSleepAt = 0;
         this.pettingReadyAt = 0;
         this.loadPetsLocked = false;
         this.petUnlockOrigin = { x: 0, y: 0 };
@@ -1299,15 +1312,33 @@ export class WorldScene extends Scene {
     private worldKeepOuts (): { x: number; y: number; radius: number }[] {
         const zones: { x: number; y: number; radius: number }[] = [];
 
-        if (this.hole) {
-            zones.push({ x: this.hole.x, y: this.hole.y, radius: HOLE_KEEP_OUT_RADIUS });
-        }
-
         if (this.sheepfold) {
             zones.push(this.sheepfold.fireKeepOut());
         }
 
         return zones;
+    }
+
+    /** Following sheep stay out of the pit; the shepherd must be able to walk up and bandage. */
+    private flockKeepOuts (
+        keepOuts: { x: number; y: number; radius: number }[]
+    ): { x: number; y: number; radius: number }[] {
+        if (!this.hole) {
+            return keepOuts;
+        }
+
+        return keepOuts.concat({ x: this.hole.x, y: this.hole.y, radius: HOLE_KEEP_OUT_RADIUS });
+    }
+
+    /** Fence rails block the shepherd until they lie down in the gate. */
+    private shepherdKeepOuts (
+        keepOuts: { x: number; y: number; radius: number }[]
+    ): { x: number; y: number; radius: number }[] {
+        if (!this.sheepfold || this.shepherd.isLyingDown || this.heardJohn109) {
+            return keepOuts;
+        }
+
+        return keepOuts.concat(this.sheepfold.fenceKeepOuts());
     }
 
     /** True while the shepherd is within HOLE_PROXIMITY_PAUSE of the hole center. */
@@ -1634,7 +1665,7 @@ export class WorldScene extends Scene {
             return;
         }
 
-        // After John 10:2: pen the flock, then sleep as soon as they are settled.
+        // After John 10:2: pen the flock, wait a beat, then sleep.
         // Does not depend on the speech onDone (heardJohn102 is set when the line starts).
         if (this.scriptPlaying || this.shepherd.isLyingDown) {
             return;
@@ -1643,6 +1674,15 @@ export class WorldScene extends Scene {
         this.beginPenning();
 
         if (!this.flockSafeInPen()) {
+            this.penSleepAt = 0;
+            return;
+        }
+
+        if (this.penSleepAt === 0) {
+            this.penSleepAt = this.time.now + PEN_SLEEP_DELAY_MS;
+        }
+
+        if (this.time.now < this.penSleepAt) {
             return;
         }
 

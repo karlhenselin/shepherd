@@ -20,6 +20,17 @@ export const FIRE_KEEP_OUT_RADIUS = 36;
 /** Sleep in the south fence opening (PNG gate between the rope-wrapped posts). */
 const GATE_OFFSET_X = -40;
 const GATE_OFFSET_Y = 64;
+/**
+ * Oval of sheepfold.png rails, in world pixels from sprite center.
+ * Posts sit on this ellipse; the south gate is a gap in the ring.
+ */
+const FENCE_CX = -28;
+const FENCE_CY = 6;
+const FENCE_RX = 112;
+const FENCE_RY = 72;
+const FENCE_POST_RADIUS = 18;
+const FENCE_POSTS = 18;
+const FENCE_GATE_GAP = 52;
 
 /** Above night veil (15), below hints / sleep / UI (18+). */
 const GLOW_DEPTH = 16;
@@ -147,6 +158,28 @@ export class Sheepfold {
             y: fire.y,
             radius: FIRE_KEEP_OUT_RADIUS
         };
+    }
+
+    /** Overlapping post circles along the rail oval, with a gap at the south gate. */
+    fenceKeepOuts (): { x: number; y: number; radius: number }[] {
+        const cx = this.x + FENCE_CX;
+        const cy = this.y + FENCE_CY;
+        const gate = this.gateSpot();
+        const zones: { x: number; y: number; radius: number }[] = [];
+
+        for (let i = 0; i < FENCE_POSTS; i++) {
+            const t = (i / FENCE_POSTS) * Math.PI * 2;
+            const x = cx + Math.cos(t) * FENCE_RX;
+            const y = cy + Math.sin(t) * FENCE_RY;
+
+            if (Math.hypot(x - gate.x, y - gate.y) < FENCE_GATE_GAP) {
+                continue;
+            }
+
+            zones.push({ x, y, radius: FENCE_POST_RADIUS });
+        }
+
+        return zones;
     }
 
     /**

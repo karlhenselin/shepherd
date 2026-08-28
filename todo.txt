@@ -1,7 +1,68 @@
-replace the leading _ with leading X tasks are complete.
-X add a eaten food plant sprite to replace the food with after sheep eat it. Make sheep walk up to one to eat from when they eat.
-X when you find a Bible gem while other talking is playing, pick it up immediately. Play the gem sound over the talking. queue the verse.
-X the sheep should sort of line up and enter the pen from the south when you get close enough to it to trigger finding it.
-_ the sheep pen fence should be a player barrier until the player lies down.
-_ When a sheep wanders off, instead of saying find you sheep, say Name wandered off
-_ wait 1 second after sheep are in the pen before the player lays down.
+1 _
+Once you find the pen, it is sort of like a movie more than the interactive story that the rest of the game is.
+keep slowly reading the rest of psalm 23 between the sheep entering the fold and laying down as the gate.
+**You prepare a table** — picnic cloth and bowl appear. Player sits and eats.
+ **In the presence of my enemies** — Several Wolves visible at the horizon walking up, but does not enter the firelight. Howling, Shepherd stands, wolves walk away.
+ Sit back down, keep reading
+ stand up, table cloth fades out.
+ time to lay down as the gate.
+
+2 _
+Add a few other watering holes into the map. Make the thirsty point to the nearest.
+If you walk near one, sheep stop and drink.
+Recite different Bible passage about drinking / water
+ - Make sure to remove any of these that are in the bible gems and add something else instead.
+ - John 4:14
+ - Deuteronomy 8:15
+ - Nehemiah 9:15a
+ - Psalm 42:2
+ - Psalm 107:9
+ - Psalm 107:33
+ - Isaiah 35:7
+ - Isaiah 44:3
+ - Isaiah 48:21
+ - Isaiah 49:10
+ - Isaiah 55:1
+ - Jeremiah 31:25
+ - Matthew 5:6
+ - John 4:13
+ - John 4:14
+ - John 6:35
+ - John 7:37
+ - Revelation 7:16
+ - Revelation 21:6b
+ - Revelation 22:1
+ - Revelation 22:17
+
+Add another section in the treasure chest for these Water/thirst verses.
+Add an acheivement for getting all of them.
+
+3_ 
+Add a tree sprite with shade around it. Make it large.
+put several around the map.
+If the player walks near, he sits in the shade for a moment (not at night)
+the sheep come near, petting is paused. Read one of these verses.
+- Genesis 2:16
+- Genesis 18:4
+- Leviticus 26:4
+- Job 7:2
+- Job 40:22
+- 1 Kings 19:5
+- 1 Chronicles 16:33
+- Nehemiah 10:35
+- Jeremiah 17:8
+- Psalm 1:3
+- Isaiah 4:6
+- Isaiah 16:3b - Shelter us at noonday with shade that is as dark as night.
+- Isaiah 25:4a - You have been a stronghold for the poor, a stronghold for the needy person in his distress, a refuge from the rain, a shade from the heat.
+- Isaiah 32:2
+- Hosea 14:7a - The people will return and live beneath his shade. 
+- Jonah 4:6a - Then the Lord God appointed a plant, and it grew up to provide shade over Jonah’s head to ease his discomfort.
+- Mark 4:32 - And when sown, it comes up and grows taller than all the vegetables, and produces large branches, so that the birds of the sky can nest in its shade.
+- 1 Peter 2:24
+Keep the last 2 until the white robes part. after white robes, make these the first tree passages to happen.
+- Revelation 2:7b - I will give the victor the right to eat from the tree of life, which is in God’s paradise.
+- Revelation 22:14 
+
+Add another treasure chest section.
+Add an acheivement for getting all of them.

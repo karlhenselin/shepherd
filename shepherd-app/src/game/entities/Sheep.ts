@@ -34,16 +34,35 @@ const SHEEP_TINT: Record<string, number> = {
     Milo: 0xd5cce6
 };
 
-/** How each sheep follows — tint alone was not a personality. */
-const SHEEP_TRAITS: Record<string, { followSpeed: number; trailScale: number; strayWeight: number }> = {
-    Clover: { followSpeed: 1.06, trailScale: 0.82, strayWeight: 0.45 },
-    Snowball: { followSpeed: 1.02, trailScale: 1.28, strayWeight: 1.85 },
-    Biscuit: { followSpeed: 0.78, trailScale: 1.05, strayWeight: 0.85 },
-    Milo: { followSpeed: 1.04, trailScale: 0.62, strayWeight: 0.40 }
+type SheepTraits = {
+    followSpeed: number;
+    trailScale: number;
+    strayWeight: number;
+    /** Walk-tilt amplitude in degrees. */
+    waddleDeg: number;
+    /** Larger = slower sway. */
+    waddlePeriod: number;
+    /** Phase so the flock does not rock in unison. */
+    waddlePhase: number;
 };
 
-function traitsFor (name: string): { followSpeed: number; trailScale: number; strayWeight: number } {
-    return SHEEP_TRAITS[name] ?? { followSpeed: 1, trailScale: 1, strayWeight: 1 };
+/** How each sheep follows — tint alone was not a personality. */
+const SHEEP_TRAITS: Record<string, SheepTraits> = {
+    Clover: { followSpeed: 1.06, trailScale: 0.82, strayWeight: 0.45, waddleDeg: 5, waddlePeriod: 78, waddlePhase: 0.6 },
+    Snowball: { followSpeed: 1.02, trailScale: 1.28, strayWeight: 1.85, waddleDeg: 10, waddlePeriod: 112, waddlePhase: 2.4 },
+    Biscuit: { followSpeed: 0.78, trailScale: 1.05, strayWeight: 0.85, waddleDeg: 6.5, waddlePeriod: 128, waddlePhase: 4.1 },
+    Milo: { followSpeed: 1.0608, trailScale: 0.62, strayWeight: 0.40, waddleDeg: 8, waddlePeriod: 70, waddlePhase: 5.2 }
+};
+
+function traitsFor (name: string): SheepTraits {
+    return SHEEP_TRAITS[name] ?? {
+        followSpeed: 1,
+        trailScale: 1,
+        strayWeight: 1,
+        waddleDeg: WADDLE_DEG,
+        waddlePeriod: 90,
+        waddlePhase: 0
+    };
 }
 
 export type SheepMood = 'waiting' | 'following' | 'drinking' | 'eating' | 'hurt' | 'penned';
@@ -392,7 +411,7 @@ export class Sheep {
 
                 if (dist > 12) {
                     this.moveToward(this.penTarget.x, this.penTarget.y, FOLLOW_SPEED);
-                    this.sprite.setAngle(Math.sin(now / 90) * WADDLE_DEG);
+                    this.sprite.setAngle(this.waddleAngle(now));
                     this.faceVelocity();
                 }
                 else {
@@ -461,7 +480,7 @@ export class Sheep {
 
         if (followDist > 18) {
             this.moveToward(targetX, targetY, FOLLOW_SPEED * traitsFor(this.name).followSpeed);
-            this.sprite.setAngle(Math.sin(now / 90) * WADDLE_DEG);
+            this.sprite.setAngle(this.waddleAngle(now));
         }
         else {
             this.body.setVelocity(0, 0);
@@ -478,7 +497,7 @@ export class Sheep {
 
         if (Math.hypot(target.x - this.sprite.x, target.y - this.sprite.y) > PET_APPROACH_ARRIVE) {
             this.moveToward(target.x, target.y, FOLLOW_SPEED * 1.08);
-            this.sprite.setAngle(Math.sin(now / 90) * WADDLE_DEG);
+            this.sprite.setAngle(this.waddleAngle(now));
             this.faceVelocity();
             this.placeShadow();
             return;
@@ -569,7 +588,7 @@ export class Sheep {
         }
 
         this.moveToward(targetX, targetY, FOLLOW_SPEED);
-        this.sprite.setAngle(Math.sin(now / 90) * WADDLE_DEG);
+        this.sprite.setAngle(this.waddleAngle(now));
         this.faceVelocity();
         this.placeShadow();
     }
@@ -598,7 +617,7 @@ export class Sheep {
         }
 
         this.moveToward(exit.x, exit.y, FOLLOW_SPEED);
-        this.sprite.setAngle(Math.sin(now / 90) * WADDLE_DEG);
+        this.sprite.setAngle(this.waddleAngle(now));
         this.faceVelocity();
         this.placeShadow();
     }
@@ -616,7 +635,7 @@ export class Sheep {
 
         if (dist > 14) {
             this.moveToward(this.rescueWait.x, this.rescueWait.y, FOLLOW_SPEED);
-            this.sprite.setAngle(Math.sin(now / 90) * WADDLE_DEG);
+            this.sprite.setAngle(this.waddleAngle(now));
             this.faceVelocity();
         }
         else {
@@ -665,6 +684,11 @@ export class Sheep {
         };
     }
 
+    private waddleAngle (now: number): number {
+        const traits = traitsFor(this.name);
+        return Math.sin(now / traits.waddlePeriod + traits.waddlePhase) * traits.waddleDeg;
+    }
+
     private faceVelocity (): void {
         if (Math.abs(this.body.velocity.x) > 8) {
             this.sprite.setFlipX(this.body.velocity.x < 0);
@@ -699,7 +723,7 @@ export class Sheep {
 
         if (dist > GRASS_EAT_ARRIVE) {
             this.moveToward(patch.x, patch.y, FOLLOW_SPEED * traitsFor(this.name).followSpeed);
-            this.sprite.setAngle(Math.sin(now / 90) * WADDLE_DEG);
+            this.sprite.setAngle(this.waddleAngle(now));
             this.faceVelocity();
             this.placeShadow();
             return 'walking';
