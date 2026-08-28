@@ -120,6 +120,8 @@ export class WorldScene extends Scene {
     private lastCue = '';
     private scriptId = 0;
     private scriptPlaying = false;
+    /** Gem verses waiting until the current spoken script finishes. */
+    private gemVerseQueue: string[] = [];
     private strayReadyAt = 0;
     private lagWarned = new WeakSet<Sheep>();
     private lostHint!: LostSheepHint;
@@ -546,6 +548,12 @@ export class WorldScene extends Scene {
         }
 
         if (lines.length === 0) {
+            if (this.gemVerseQueue.length > 0) {
+                const queued = this.gemVerseQueue.splice(0);
+                this.speakLines(id, queued, onDone);
+                return;
+            }
+
             this.scriptPlaying = false;
             onDone?.();
 
@@ -663,8 +671,12 @@ export class WorldScene extends Scene {
             return this.closestToShepherd(toBandage.map((sheep) => sheep.sprite));
         }
 
-        if (this.flock.some((sheep) => sheep.hungry) && this.grass.length > 0) {
-            return this.closestToShepherd(this.grass);
+        if (this.flock.some((sheep) => sheep.hungry)) {
+            const fresh = this.grass.filter((patch) => !patch.eaten);
+
+            if (fresh.length > 0) {
+                return this.closestToShepherd(fresh);
+            }
         }
 
         if (this.flock.some((sheep) => sheep.thirsty) && this.water.length > 0) {
@@ -925,6 +937,7 @@ export class WorldScene extends Scene {
         this.water = [];
         this.lastCue = '';
         this.scriptPlaying = false;
+        this.gemVerseQueue = [];
         this.nextNames = FLOCK_NAMES.slice(1);
         this.foundCount = 0;
         this.heardPsalm1 = false;
@@ -1555,7 +1568,7 @@ export class WorldScene extends Scene {
     }
 
     private maybeCollectGem (): void {
-        if (this.scriptPlaying || this.gems.length === 0) {
+        if (this.gems.length === 0) {
             return;
         }
 
@@ -1587,11 +1600,16 @@ export class WorldScene extends Scene {
         // Prefer the story checkpoint; early pickups before any scripture use found-gem.
         this.saveProgress(this.lastCheckpoint ?? 'found-gem');
 
-        this.playLines(
-            firstBibleGem
-                ? ['You found a Bible gem.', gem.line()]
-                : [gem.line()]
-        );
+        const lines = firstBibleGem
+            ? ['You found a Bible gem.', gem.line()]
+            : [gem.line()];
+
+        if (this.scriptPlaying) {
+            this.gemVerseQueue.push(...lines);
+            return;
+        }
+
+        this.playLines(lines);
     }
 
     private maybeReachPen (): void {
@@ -1631,27 +1649,21 @@ export class WorldScene extends Scene {
         this.sleepAtGate();
     }
 
-    /** Send any unpenned sheep walking to fold rest spots. */
+    /** Line up south of the gate, file through the opening, then rest inside. */
     private beginPenning (): void {
         const fold = this.ensurePen();
-        this.flock.forEach((sheep, slot) => {
-            if (sheep.isSettledInPen) {
-                return;
-            }
+        const count = this.flock.length;
 
+        this.flock.forEach((sheep, slot) => {
             if (sheep.isPenned) {
                 return;
             }
 
+            const line = fold.lineUpSpot(slot, count);
+            const gate = fold.gateEnterSpot(slot, count);
             const rest = fold.restSpot(slot);
-
-            // Already at the fold (e.g. followed the shepherd in) — settle now so sleep can start.
-            if (fold.isNear(sheep.sprite.x, sheep.sprite.y)) {
-                sheep.settleInPen(rest.x, rest.y);
-                return;
-            }
-
-            sheep.enterPen(rest.x, rest.y);
+            const around = fold.southApproach(sheep.sprite.x, sheep.sprite.y, line);
+            sheep.enterPen([...around, line, gate, rest]);
         });
     }
 

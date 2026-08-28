@@ -1,3 +1,7 @@
 replace the leading _ with leading X tasks are complete.
-_ add a eaten food plant sprite to replace the food with after sheep eat it. Make sheep walk up to one to eat from when they eat.
-_ when you find a Bible gem while other talking is playing, pick it up immediately. Play the gem sound over the talking. queue the verse.
+X add a eaten food plant sprite to replace the food with after sheep eat it. Make sheep walk up to one to eat from when they eat.
+X when you find a Bible gem while other talking is playing, pick it up immediately. Play the gem sound over the talking. queue the verse.
+X the sheep should sort of line up and enter the pen from the south when you get close enough to it to trigger finding it.
+_ the sheep pen fence should be a player barrier until the player lies down.
+_ When a sheep wanders off, instead of saying find you sheep, say Name wandered off
+_ wait 1 second after sheep are in the pen before the player lays down.

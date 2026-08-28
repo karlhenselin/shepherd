@@ -87,6 +87,37 @@ export class Sheepfold {
         return { x: this.x + GATE_OFFSET_X, y: this.y + GATE_OFFSET_Y };
     }
 
+    /** Horizontal queue south of the gate — sheep line up here before filing in. */
+    lineUpSpot (slot: number, count: number): { x: number; y: number } {
+        const gate = this.gateSpot();
+        const spread = (slot - (count - 1) / 2) * 34;
+        return { x: gate.x + spread, y: gate.y + 72 };
+    }
+
+    /** A few pixels inside the south opening, slightly spread so they don't stack. */
+    gateEnterSpot (slot: number, count: number): { x: number; y: number } {
+        const gate = this.gateSpot();
+        const spread = (slot - (count - 1) / 2) * 10;
+        return { x: gate.x + spread, y: gate.y - 12 };
+    }
+
+    /**
+     * Walk around the fold to the south lineup instead of cutting through the fence.
+     * Empty if the sheep is already south of the gate.
+     */
+    southApproach (x: number, y: number, lineup: { x: number; y: number }): { x: number; y: number }[] {
+        if (y >= lineup.y - 12) {
+            return [];
+        }
+
+        const sideX = x > this.x + 80 ? this.x + 210 : this.x - 200;
+
+        return [
+            { x: sideX, y },
+            { x: sideX, y: lineup.y }
+        ];
+    }
+
     /**
      * Shepherd dawn stand — south of the flock gather so they are not
      * sitting in walk-into pet range on wake.

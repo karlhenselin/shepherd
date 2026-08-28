@@ -1,6 +1,6 @@
 import { Scene, GameObjects, Physics } from 'phaser';
 import { Shepherd } from './Shepherd';
-import { GrassPatch } from '../world/GrassPatch';
+import { GrassPatch, GRASS_APPROACH_RANGE, GRASS_EAT_ARRIVE } from '../world/GrassPatch';
 import { WaterSource } from '../world/WaterSource';
 import { characterDepth } from '../world/constants';
 
@@ -76,8 +76,11 @@ export class Sheep {
     private petApproachArrive: (() => void) | null = null;
     private scootUntil = 0;
     private penTarget: { x: number; y: number } | null = null;
+    private penPath: { x: number; y: number }[] = [];
     /** Sit aside during hole rescue (not in the pit). */
     private rescueWait: { x: number; y: number } | null = null;
+    /** Tuft this sheep is walking toward or chewing. */
+    private eatPatch: GrassPatch | null = null;
 
     constructor (scene: Scene, x: number, y: number, name: string, followSlot: number) {
         this.scene = scene;
@@ -161,6 +164,9 @@ export class Sheep {
         this.discovered = true;
         this.mood = 'following';
         this.rescueWait = null;
+        this.eatPatch = null;
+        this.penPath = [];
+        this.penTarget = null;
         this.body.setImmovable(false);
         this.body.setVelocity(0, 0);
     }
@@ -170,6 +176,7 @@ export class Sheep {
         this.rescueWait = null;
         this.mood = 'waiting';
         this.penTarget = null;
+        this.penPath = [];
         this.sprite.setPosition(x, y);
         this.sprite.setAngle(0);
         this.body.setVelocity(0, 0);
@@ -256,16 +263,22 @@ export class Sheep {
         return traitsFor(this.name).strayWeight;
     }
 
-    /** Penned and finished walking to the rest spot. */
-    get isSettledInPen (): boolean {
-        return this.mood === 'penned' && this.penTarget === null;
+    /** Walking into or resting in the fold. */
+    get isPenned (): boolean {
+        return this.mood === 'penned';
     }
 
-    enterPen (x: number, y: number): void {
+    /** Penned and finished walking to the rest spot. */
+    get isSettledInPen (): boolean {
+        return this.mood === 'penned' && this.penTarget === null && this.penPath.length === 0;
+    }
+
+    enterPen (path: { x: number; y: number }[]): void {
         this.clearHappyDance();
         this.rescueWait = null;
         this.mood = 'penned';
-        this.penTarget = { x, y };
+        this.penPath = path.slice();
+        this.penTarget = this.penPath.shift() ?? null;
         this.body.setImmovable(false);
         this.body.setVelocity(0, 0);
     }
@@ -274,6 +287,7 @@ export class Sheep {
         this.clearHappyDance();
         this.rescueWait = null;
         this.mood = 'penned';
+        this.penPath = [];
         this.penTarget = null;
         this.sprite.setPosition(x, y);
         this.sprite.setAngle(0);
@@ -352,6 +366,8 @@ export class Sheep {
                 this.sprite.setAngle(0);
                 this.mood = 'following';
                 this.hungry = false;
+                this.eatPatch?.markEaten();
+                this.eatPatch = null;
             }
 
             return null;
@@ -380,10 +396,13 @@ export class Sheep {
                     this.faceVelocity();
                 }
                 else {
-                    this.penTarget = null;
+                    this.penTarget = this.penPath.shift() ?? null;
                     this.body.setVelocity(0, 0);
-                    this.body.setImmovable(true);
-                    this.sprite.setAngle(0);
+
+                    if (!this.penTarget) {
+                        this.body.setImmovable(true);
+                        this.sprite.setAngle(0);
+                    }
                 }
             }
             else {
@@ -408,8 +427,16 @@ export class Sheep {
             return null;
         }
 
-        if (this.hungry && this.tryEat(grass, now)) {
-            return 'ate';
+        if (this.hungry) {
+            const hunger = this.tickHunger(grass, now);
+
+            if (hunger === 'ate') {
+                return 'ate';
+            }
+
+            if (hunger === 'walking') {
+                return null;
+            }
         }
 
         if (this.thirsty && this.tryDrink(water, now)) {
@@ -652,19 +679,63 @@ export class Sheep {
         this.shadow.setFlipX(this.sprite.flipX);
     }
 
-    private tryEat (grass: GrassPatch[], now: number): boolean {
-        const patch = grass.find((tuft) => tuft.isNear(this.sprite.x, this.sprite.y));
+    /** Walk up to an uneaten tuft, then chew. */
+    private tickHunger (grass: GrassPatch[], now: number): 'ate' | 'walking' | null {
+        const patch = this.pickEatPatch(grass);
 
         if (!patch) {
-            return false;
+            this.eatPatch = null;
+            return null;
         }
 
+        const dist = Math.hypot(patch.x - this.sprite.x, patch.y - this.sprite.y);
+
+        if (dist > GRASS_APPROACH_RANGE) {
+            this.eatPatch = null;
+            return null;
+        }
+
+        this.eatPatch = patch;
+
+        if (dist > GRASS_EAT_ARRIVE) {
+            this.moveToward(patch.x, patch.y, FOLLOW_SPEED * traitsFor(this.name).followSpeed);
+            this.sprite.setAngle(Math.sin(now / 90) * WADDLE_DEG);
+            this.faceVelocity();
+            this.placeShadow();
+            return 'walking';
+        }
+
+        patch.claim();
         this.mood = 'eating';
         this.eatUntil = now + EAT_MS;
         this.body.setVelocity(0, 0);
         this.sprite.setAngle(-10);
         this.placeShadow();
-        return true;
+        return 'ate';
+    }
+
+    private pickEatPatch (grass: GrassPatch[]): GrassPatch | null {
+        if (this.eatPatch?.available) {
+            return this.eatPatch;
+        }
+
+        let nearest: GrassPatch | null = null;
+        let best = Infinity;
+
+        for (const tuft of grass) {
+            if (!tuft.available) {
+                continue;
+            }
+
+            const dist = Math.hypot(tuft.x - this.sprite.x, tuft.y - this.sprite.y);
+
+            if (dist < best) {
+                best = dist;
+                nearest = tuft;
+            }
+        }
+
+        return nearest;
     }
 
     private tryDrink (water: WaterSource[], now: number): boolean {
