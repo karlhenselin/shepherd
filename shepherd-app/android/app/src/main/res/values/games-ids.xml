@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Paste the Play Games Services project id from Google Play Console. -->
+    <string name="game_services_project_id" translatable="false">YOUR_PGS_PROJECT_ID</string>
+</resources>

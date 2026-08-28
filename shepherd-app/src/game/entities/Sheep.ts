@@ -33,6 +33,18 @@ const SHEEP_TINT: Record<string, number> = {
     Milo: 0xd5cce6
 };
 
+/** How each sheep follows — tint alone was not a personality. */
+const SHEEP_TRAITS: Record<string, { followSpeed: number; trailScale: number; strayWeight: number }> = {
+    Clover: { followSpeed: 1.06, trailScale: 0.82, strayWeight: 0.45 },
+    Snowball: { followSpeed: 1.02, trailScale: 1.28, strayWeight: 1.85 },
+    Biscuit: { followSpeed: 0.78, trailScale: 1.05, strayWeight: 0.85 },
+    Milo: { followSpeed: 1.04, trailScale: 0.62, strayWeight: 0.40 }
+};
+
+function traitsFor (name: string): { followSpeed: number; trailScale: number; strayWeight: number } {
+    return SHEEP_TRAITS[name] ?? { followSpeed: 1, trailScale: 1, strayWeight: 1 };
+}
+
 export type SheepMood = 'waiting' | 'following' | 'drinking' | 'eating' | 'hurt' | 'penned';
 export type SheepEvent = 'found' | 'ate' | 'drank' | 'rejoined' | null;
 
@@ -45,6 +57,8 @@ export class Sheep {
     thirsty = false;
     hungry = false;
     hurt = false;
+    /** Stuck in a bramble (uses hurt/bandage flow, not the hole). */
+    snaredInThorns = false;
     discovered = false;
     mood: SheepMood = 'waiting';
     private readonly body: Physics.Arcade.Body;
@@ -151,6 +165,7 @@ export class Sheep {
         this.clearHappyDance();
         this.rescueWait = null;
         this.hurt = true;
+        this.snaredInThorns = false;
         this.mood = 'hurt';
         this.sprite.setAngle(32);
         this.sprite.setTint(0xe8a898);
@@ -159,13 +174,30 @@ export class Sheep {
         this.body.setVelocity(0, 0);
     }
 
+    /** Following sheep caught in brambles — bandage to free them. */
+    snareInThorns (): void {
+        this.clearHappyDance();
+        this.rescueWait = null;
+        this.hurt = true;
+        this.snaredInThorns = true;
+        this.discovered = true;
+        this.mood = 'hurt';
+        this.sprite.setAngle(18);
+        this.sprite.setTint(0xc4d4a0);
+        this.body.setImmovable(true);
+        this.body.setVelocity(0, 0);
+        this.placeShadow();
+    }
+
     heal (): void {
         this.hurt = false;
+        this.snaredInThorns = false;
         this.sprite.setAngle(0);
         this.sprite.setTint(SHEEP_TINT[this.name] ?? 0xffffff);
         this.shadow.setAlpha(1);
         this.rescueWait = null;
         this.beginFollowing();
+        this.deferWalkIntoPetting(8000);
         this.placeShadow();
     }
 
@@ -203,8 +235,9 @@ export class Sheep {
         this.discovered = true;
     }
 
-    get isPenned (): boolean {
-        return this.mood === 'penned';
+    /** Snowball strays; Clover and Milo cling. Used when picking who falls behind. */
+    get strayWeight (): number {
+        return traitsFor(this.name).strayWeight;
     }
 
     /** Penned and finished walking to the rest spot. */
@@ -379,7 +412,7 @@ export class Sheep {
         const followDist = Math.hypot(targetX - this.sprite.x, targetY - this.sprite.y);
 
         if (followDist > 18) {
-            this.moveToward(targetX, targetY, FOLLOW_SPEED);
+            this.moveToward(targetX, targetY, FOLLOW_SPEED * traitsFor(this.name).followSpeed);
             this.sprite.setAngle(Math.sin(now / 90) * WADDLE_DEG);
         }
         else {
@@ -544,7 +577,7 @@ export class Sheep {
      * sheep don't stack on one trail spot (slot 0 dead-center behind).
      */
     private trailTarget (shepherd: Shepherd, huddle: boolean): { targetX: number; targetY: number } {
-        const spacing = huddle ? NIGHT_FOLLOW_DISTANCE : FOLLOW_DISTANCE;
+        const spacing = (huddle ? NIGHT_FOLLOW_DISTANCE : FOLLOW_DISTANCE) * traitsFor(this.name).trailScale;
         const { x: hx, y: hy } = shepherd.moveHeading;
         const behindX = -hx;
         const behindY = -hy;

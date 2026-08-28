@@ -36,6 +36,7 @@ export class Shepherd {
         this.shadow = scene.add.image(x, y + SHADOW_OFFSET, 'shepherd-shadow');
 
         this.sprite = scene.physics.add.sprite(x, y, 'shepherd');
+        this.sprite.setDisplaySize(SHEPHERD_W, SHEPHERD_H);
         this.body = this.sprite.body as Physics.Arcade.Body;
         this.placeShadow();
         this.body.setCollideWorldBounds(true);
@@ -77,6 +78,10 @@ export class Shepherd {
 
     get isGuided (): boolean {
         return this.guided;
+    }
+
+    get isMoving (): boolean {
+        return Math.hypot(this.body.velocity.x, this.body.velocity.y) > 12;
     }
 
     /** Last travel direction as a unit vector (stable while standing still). */
@@ -187,6 +192,7 @@ export class Shepherd {
             ? (this.staffEquipped ? 'shepherd-staff-white' : 'shepherd-white')
             : (this.staffEquipped ? 'shepherd-staff' : 'shepherd');
         this.sprite.setTexture(key);
+        this.sprite.setDisplaySize(SHEPHERD_W, SHEPHERD_H);
     }
 
     update (keepOuts: KeepOutZone[] = []): void {
@@ -329,6 +335,10 @@ export class Shepherd {
 
 function ensureShepherdTextures (scene: Scene): void {
     const keys = ['shepherd', 'shepherd-staff', 'shepherd-white', 'shepherd-staff-white'];
+
+    if (keys.every((key) => scene.textures.exists(key))) {
+        return;
+    }
 
     for (const key of keys) {
         if (scene.textures.exists(key)) {

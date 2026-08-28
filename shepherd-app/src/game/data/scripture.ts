@@ -98,7 +98,7 @@ export const CORINTHIANS_15_51 = {
 } as const;
 
 export function corinthians15Line (): string {
-    return `${CORINTHIANS_15_51.text} — ${CORINTHIANS_15_51.ref}`;
+    return `${CORINTHIANS_15_51.text}\n— ${CORINTHIANS_15_51.ref}`;
 }
 
 /** Findable Bible gems from `Bible gems.md`. */

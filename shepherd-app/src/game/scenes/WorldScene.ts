@@ -1,5 +1,6 @@
 import { Scene, GameObjects, Scenes } from 'phaser';
 import { Shepherd } from '../entities/Shepherd';
+import { Wolf } from '../entities/Wolf';
 import { FOLLOW_DISTANCE, FOLLOW_SPEED, Sheep } from '../entities/Sheep';
 import {
     findPointAwayFromAll,
@@ -17,10 +18,12 @@ import { GrassPatch, placePasture } from '../world/GrassPatch';
 import { WaterSource } from '../world/WaterSource';
 import { Sheepfold } from '../world/Sheepfold';
 import { Hole, HOLE_KEEP_OUT_RADIUS } from '../world/Hole';
+import { Thorns, placeThorns } from '../world/Thorns';
 import { StaffPickup } from '../world/StaffPickup';
 import { BibleGem, placeBibleGems, spawnBibleGemAway } from '../world/BibleGem';
 import { watercolorWorld } from '../world/watercolorWorld';
 import { speakCue, stopSpeech } from '../ui/speech';
+import { playGemDing, tickWalkSound } from '../audio/cues';
 import { startHowling, stopHowling, suspendHowling, syncHowling, unsuspendHowling } from '../audio/howl';
 import { isSoundOn, setSoundOn } from '../audio/soundPref';
 import { WANDERLUST_KEY, WONDERS_KEY, applySavedWorldMusic, clearWorldMusicProgress, clearWorldMusicSeek, fadeInWorldMusic, fadeOutWorldMusic, getWorldMusicProgress, isWorldMusicKey, setWorldMusicTrack, startWorldMusic, stopWorldMusic } from '../audio/worldMusic';
@@ -36,7 +39,7 @@ import { TREASURE_CHEST_KEY, TREASURE_CHEST_SIZE, ensureTreasureChest } from '..
 import { applyAchievements, syncAchievements } from '../achievements/achievements';
 import { GameSave, StoryCheckpoint, loadSave, writeSave } from '../save/gameSave';
 
-const FLOCK_NAMES = ['Clover', 'Snowball', 'Biscuit', 'Milo'];
+const FLOCK_NAMES = ['Clover', 'Snowball', 'Milo', 'Biscuit'];
 const SHEPHERD_SPEED = 180;
 const STRAY_AHEAD_DISTANCE = FOLLOW_DISTANCE + (SHEPHERD_SPEED - FOLLOW_SPEED) * 7;
 /** Once lagging sheep crosses this fraction of stray distance, fire one warning baah. */
@@ -98,6 +101,8 @@ export class WorldScene extends Scene {
     private water: WaterSource[] = [];
     private sheepfold: Sheepfold | null = null;
     private hole: Hole | null = null;
+    private thorns: Thorns[] = [];
+    private wolf: Wolf | null = null;
     private staffPickup: StaffPickup | null = null;
     private gems: BibleGem[] = [];
     private foundGems: string[] = [];
@@ -192,6 +197,8 @@ export class WorldScene extends Scene {
         else {
             this.grass = placePasture(this, regionCenter(PASTURE_COL, PASTURE_ROW));
         }
+
+        this.thorns = placeThorns(this);
 
         if (save?.pen) {
             this.ensurePen(save.pen);
@@ -293,9 +300,10 @@ export class WorldScene extends Scene {
         });
     }
 
-    update (): void {
+    update (_time: number, delta: number): void {
         const keepOuts = this.worldKeepOuts();
         this.shepherd.update(keepOuts);
+        tickWalkSound(this, this.shepherd.isMoving && !this.shepherd.isLyingDown);
         watercolorWorld().rainIntoView(this);
         watercolorWorld().tick(this, this.time.now);
 
@@ -336,6 +344,8 @@ export class WorldScene extends Scene {
 
         this.tickNightDarkness();
         this.tickNightBaahs();
+        this.tickWolf(delta);
+        this.tickThorns();
         this.sheepfold?.tickGlow(this.nightVeil.alpha, this.time.now);
         tickSheepSounds(this, this.flock, this.shepherd.sprite, this.nightStarted);
         this.lostHint.update(this, this.shepherd, this.hintTarget(), Boolean(this.staffPickup));
@@ -586,7 +596,9 @@ export class WorldScene extends Scene {
         const hurt = this.flock.find((sheep) => sheep.hurt && sheep.discovered);
 
         if (hurt) {
-            return `Bandage ${hurt.name}.`;
+            return hurt.snaredInThorns
+                ? `Free ${hurt.name} from the thorns.`
+                : `Bandage ${hurt.name}.`;
         }
 
         if (this.heardJohn109 && !this.heardCorinthians) {
@@ -896,6 +908,8 @@ export class WorldScene extends Scene {
         setWorldMusicTrack(this, WANDERLUST_KEY);
         this.sheepfold = null;
         this.hole = null;
+        this.thorns = [];
+        this.dismissWolf();
         this.staffPickup = null;
         this.gems = [];
         this.foundGems = [];
@@ -1024,6 +1038,57 @@ export class WorldScene extends Scene {
         this.bandageButton.setVisible(dist <= BANDAGE_RANGE);
     }
 
+    private tickThorns (): void {
+        if (this.scriptPlaying || this.bandageRescuing || this.shepherd.isLyingDown) {
+            return;
+        }
+
+        for (const sheep of this.flock) {
+            if (sheep.mood !== 'following' || sheep.hurt || sheep.isBusy) {
+                continue;
+            }
+
+            if (this.thorns.some((patch) => patch.contains(sheep.sprite.x, sheep.sprite.y))) {
+                sheep.snareInThorns();
+                this.showCue(`${sheep.name} is caught in the thorns.`);
+                return;
+            }
+        }
+    }
+
+    private rescueFromThorns (hurt: Sheep): void {
+        this.bandageRescuing = true;
+        this.bandageButton.setVisible(false);
+        this.stageFlockAside(hurt.sprite.x, hurt.sprite.y, hurt);
+
+        this.shepherd.guideTo(hurt.sprite.x, hurt.sprite.y, () => {
+            this.shepherd.beginPetting(hurt.sprite.x, hurt.sprite.y, BANDAGE_KNEEL_MS);
+
+            this.time.delayedCall(BANDAGE_HEAL_AT_MS, () => {
+                if (!this.sys.isActive() || !this.bandageRescuing || !hurt.hurt) {
+                    return;
+                }
+
+                hurt.heal();
+                this.playLines([`You free ${hurt.name} from the thorns.`], () => {
+                    this.finishThornRescue();
+                });
+            });
+        });
+    }
+
+    private finishThornRescue (): void {
+        for (const sheep of this.flock) {
+            sheep.endRescueWait();
+
+            if (sheep.mood === 'following' && !sheep.hurt) {
+                sheep.deferWalkIntoPetting(PETTING_SUPPRESS_MS);
+            }
+        }
+
+        this.bandageRescuing = false;
+    }
+
     private tryBandage (): void {
         const hurt = this.flock.find((sheep) => sheep.hurt && sheep.discovered);
 
@@ -1031,7 +1096,11 @@ export class WorldScene extends Scene {
             return;
         }
 
-        if (this.shepherd.isLyingDown || this.shepherd.isPetting || this.nightStarted) {
+        if (this.shepherd.isLyingDown || this.shepherd.isPetting) {
+            return;
+        }
+
+        if (this.nightStarted && !hurt.snaredInThorns) {
             return;
         }
 
@@ -1042,6 +1111,11 @@ export class WorldScene extends Scene {
 
         if (dist > BANDAGE_RANGE) {
             this.showCue('Get closer.');
+            return;
+        }
+
+        if (hurt.snaredInThorns) {
+            this.rescueFromThorns(hurt);
             return;
         }
 
@@ -1345,6 +1419,8 @@ export class WorldScene extends Scene {
             return;
         }
 
+        playGemDing(this);
+
         const firstBibleGem = this.foundGems.length === 0;
         this.foundGems.push(gem.id);
         this.gems = this.gems.filter((item) => item !== gem);
@@ -1441,6 +1517,7 @@ export class WorldScene extends Scene {
     private sleepAtGate (): void {
         const fold = this.ensurePen();
         const gate = fold.gateSpot();
+        this.dismissWolf();
         this.shepherd.lieDown(gate.x, gate.y);
         this.playLines([john10Line(9)], () => {
             this.beginMystery();
@@ -1466,6 +1543,7 @@ export class WorldScene extends Scene {
         this.sleepVeil.setAlpha(0);
         this.styleCueForDay();
         stopHowling();
+        this.dismissWolf();
         this.playWorldMusic();
     }
 
@@ -1521,6 +1599,7 @@ export class WorldScene extends Scene {
         this.styleCueForDay();
         this.shepherd.wake();
         this.releaseFlockFromPen(this.fold());
+        this.dismissWolf();
         // Crossing night resets seek; morning track always starts at 0.
         clearWorldMusicSeek();
         setWorldMusicTrack(this, WONDERS_KEY);
@@ -1535,13 +1614,13 @@ export class WorldScene extends Scene {
         });
     }
 
-    /** IntroScene-like typography for the Corinthians sleep beat (black veil). */
+    /** Match IntroScene "In the beginning" line for the Corinthians sleep beat. */
     private styleCueForMystery (): void {
         const { width, height } = this.scale;
         this.cueText
             .setStyle({
                 fontFamily: 'Georgia, Palatino, serif',
-                fontSize: '36px',
+                fontSize: '42px',
                 color: '#f4ead8',
                 backgroundColor: '#00000000',
                 align: 'center',
@@ -1567,6 +1646,27 @@ export class WorldScene extends Scene {
             .setOrigin(0, 0);
     }
 
+    private tickWolf (delta: number): void {
+        if (!this.wolf || this.shepherd.isLyingDown || this.sleepVeil.alpha > 0.2) {
+            return;
+        }
+
+        this.wolf.update(this.shepherd, delta);
+    }
+
+    private ensureWolf (): void {
+        if (this.wolf || this.heardCorinthians) {
+            return;
+        }
+
+        this.wolf = new Wolf(this, this.shepherd.sprite.x, this.shepherd.sprite.y);
+    }
+
+    private dismissWolf (): void {
+        this.wolf?.destroy();
+        this.wolf = null;
+    }
+
     private applyNight (animate: boolean): void {
         this.nightStarted = true;
         this.nightDarkAt = this.time.now;
@@ -1579,6 +1679,8 @@ export class WorldScene extends Scene {
         if (!this.heardJohn102 && !this.heardPsalm4b) {
             startHowling(this);
         }
+
+        this.ensureWolf();
 
         if (animate) {
             this.tweens.add({
@@ -1638,7 +1740,7 @@ export class WorldScene extends Scene {
         ];
         const spawn = findPointAwayFromAll(placed, WAITING_SPAWN_MIN, WAITING_SPAWN_GAP);
 
-        if (slot === 2 && !this.heardPsalm3) {
+        if (name === 'Biscuit' && !this.heardPsalm3) {
             this.hole = new Hole(this, spawn.x, spawn.y);
             const trapped = new Sheep(this, spawn.x, spawn.y + 10, name, slot);
             trapped.trapInHole();
@@ -1675,6 +1777,7 @@ export class WorldScene extends Scene {
         const sy = this.shepherd.sprite.y;
         let farthest = followers[0];
         let farthestDist = 0;
+        let farthestScore = -1;
 
         for (const sheep of followers) {
             const dist = Math.hypot(sheep.sprite.x - sx, sheep.sprite.y - sy);
@@ -1683,7 +1786,10 @@ export class WorldScene extends Scene {
                 this.lagWarned.delete(sheep);
             }
 
-            if (dist > farthestDist) {
+            const score = dist * sheep.strayWeight;
+
+            if (score > farthestScore) {
+                farthestScore = score;
                 farthestDist = dist;
                 farthest = sheep;
             }
