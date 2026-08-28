@@ -28,6 +28,10 @@ export class Preloader extends Scene
         this.load.image('shepherd-staff', 'shepherd-staff.png');
         this.load.image('shepherd-white', 'shepherd-white.png');
         this.load.image('shepherd-staff-white', 'shepherd-staff-white.png');
+        this.load.image('shepherd-kneel', 'shepherd-kneel.png');
+        this.load.image('shepherd-kneel-staff', 'shepherd-kneel-staff.png');
+        this.load.image('shepherd-kneel-white', 'shepherd-kneel-white.png');
+        this.load.image('shepherd-kneel-staff-white', 'shepherd-kneel-staff-white.png');
         this.load.image('water-source', 'water.png');
         this.load.image('thorns', 'thorns.png');
         this.load.audio('exhale', 'audio/exhale.mp3');

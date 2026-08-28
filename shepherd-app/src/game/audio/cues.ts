@@ -8,8 +8,8 @@ const STEP_GAP_MS = 340;
 let lastStepAt = 0;
 
 export function loadCueSounds (load: Phaser.Loader.LoaderPlugin): void {
-    load.audio(FOOTSTEP_KEY, 'audio/footstep.wav');
-    load.audio(GEM_DING_KEY, 'audio/gem-ding.wav');
+    load.audio(FOOTSTEP_KEY, 'audio/footstep.mp3');
+    load.audio(GEM_DING_KEY, 'audio/194439__high_festiva__gem_ping.mp3');
 }
 
 export function tickWalkSound (scene: Scene, walking: boolean): void {
@@ -25,7 +25,7 @@ export function tickWalkSound (scene: Scene, walking: boolean): void {
 
     lastStepAt = now;
     scene.sound.play(FOOTSTEP_KEY, {
-        volume: 0.2,
+        volume: 1.3,
         detune: -50 + Math.random() * 100,
         rate: 0.92 + Math.random() * 0.16
     });
@@ -36,5 +36,5 @@ export function playGemDing (scene: Scene): void {
         return;
     }
 
-    scene.sound.play(GEM_DING_KEY, { volume: 0.55 });
+    scene.sound.play(GEM_DING_KEY, { volume: 0.45 });
 }

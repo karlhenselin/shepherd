@@ -1,12 +1,9 @@
 replace the leading _ with leading X tasks are complete.
-X remove the tent from the sheep pen
-X move the sleeping position of the shepherd to line up with the opening in the pen.
-X Add a wolf sprite.
-X improve the shepherd sprite.
-X add thorns in the game. Put a few around the map. If a sheep touches it, they get stuck in it and need help. Similar to the bandage stuff.
-X generate ideas of content to add to the game to have more activities, probably before getting to the pen, or add a second day before "we will all be changed" - content.txt
-X generate ideas of what could make the game more fun - fun.txt
-X improve sheep personality implementation.
-X Milo doesn't seem to be part of the main story. Let's figure out a place to put finding Milo so it isn't missed, maybe during night after the staff? or before the hole?
-X generate some walking noises and add them.
-X generate a ding sound for when you find a Bible gem. high pitch, short.
+_ create better grass sprite
+_ update cheat selection if it is out of date.
+_ When you free a sheep from the thorns, push them away from the thorns 60px and pause the thorns effect for 4 seconds.
+_ make the direction arrows further from the center of the screen as they overlap the player.
+_ the sheep are just a little too close to the player when following. increase the distance by 15%.
+_ Milo and biscuit spawned in the same place at the same time basically, and both were off the screen, and there was no hole that biscuit was in. Make them spawn in different areas, and don't have the 2 finds right in a row. Do something else in between. Fix the hole, don't spawn anything within 100px of the edge of the map.
+_ 
+_ 

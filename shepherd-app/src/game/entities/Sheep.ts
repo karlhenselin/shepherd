@@ -16,8 +16,9 @@ const SHEEP_SIZE = 48;
 const SHADOW_OFFSET = 18;
 const WADDLE_DEG = 7;
 const PET_DISTANCE = 50;
-const PET_DANCE_MS = 2400;
+export const PET_DANCE_MS = 2400;
 const PET_COOLDOWN_MS = 13000;
+const PET_APPROACH_ARRIVE = 12;
 /** End post-pet scoot once shepherd–sheep separation reaches this (clear of PET_DISTANCE ~50). */
 const PET_SCOOT_SEPARATION = 90;
 const PET_SCOOT_MS = 750;
@@ -71,6 +72,8 @@ export class Sheep {
     private nextPetAt = 0;
     private danceHomeX = 0;
     private danceHomeY = 0;
+    private petApproach: { x: number; y: number } | null = null;
+    private petApproachArrive: (() => void) | null = null;
     private scootUntil = 0;
     private penTarget: { x: number; y: number } | null = null;
     /** Sit aside during hole rescue (not in the pit). */
@@ -109,13 +112,17 @@ export class Sheep {
         return this.scene.time.now < this.scootUntil;
     }
 
+    get isApproachingForPet (): boolean {
+        return this.petApproach !== null;
+    }
+
     get isRescueWaiting (): boolean {
         return this.rescueWait !== null;
     }
 
     /** Following sheep that aren't hurt / penned / mid-meal. */
     canBePetted (): boolean {
-        if (this.mood !== 'following' || this.hurt || this.isBusy || this.isDancing || this.isScooting || this.isRescueWaiting) {
+        if (this.mood !== 'following' || this.hurt || this.isBusy || this.isDancing || this.isScooting || this.isRescueWaiting || this.isApproachingForPet) {
             return false;
         }
 
@@ -134,6 +141,15 @@ export class Sheep {
         this.danceHomeY = this.sprite.y;
         this.body.setVelocity(0, 0);
         this.body.setImmovable(true);
+    }
+
+    /** Walk to the kneeling shepherd's hand, then run onArrive (usually beginHappyDance). */
+    approachForPet (handX: number, handY: number, onArrive: () => void): void {
+        this.clearHappyDance();
+        this.petApproach = { x: handX, y: handY };
+        this.petApproachArrive = onArrive;
+        this.body.setImmovable(false);
+        this.body.setVelocity(0, 0);
     }
 
     /** Block walk-into pets for a while (find celebration bypasses `canBePetted`). */
@@ -293,6 +309,11 @@ export class Sheep {
             return null;
         }
 
+        if (this.petApproach) {
+            this.tickPetApproach(now);
+            return null;
+        }
+
         if (this.danceUntil > 0 && now >= this.danceUntil) {
             this.finishHappyDance();
             this.beginScootAway(shepherd.sprite.x, shepherd.sprite.y);
@@ -423,6 +444,26 @@ export class Sheep {
         this.faceVelocity();
         this.placeShadow();
         return null;
+    }
+
+    private tickPetApproach (now: number): void {
+        const target = this.petApproach!;
+
+        if (Math.hypot(target.x - this.sprite.x, target.y - this.sprite.y) > PET_APPROACH_ARRIVE) {
+            this.moveToward(target.x, target.y, FOLLOW_SPEED * 1.08);
+            this.sprite.setAngle(Math.sin(now / 90) * WADDLE_DEG);
+            this.faceVelocity();
+            this.placeShadow();
+            return;
+        }
+
+        this.petApproach = null;
+        const arrive = this.petApproachArrive;
+        this.petApproachArrive = null;
+        this.body.setVelocity(0, 0);
+        this.sprite.setAngle(0);
+        this.placeShadow();
+        arrive?.();
     }
 
     private playHappyDance (now: number): void {
@@ -561,7 +602,13 @@ export class Sheep {
         this.placeShadow();
     }
 
+    private clearPetApproach (): void {
+        this.petApproach = null;
+        this.petApproachArrive = null;
+    }
+
     private clearHappyDance (): void {
+        this.clearPetApproach();
         this.clearScoot();
 
         if (this.danceUntil <= 0) {

@@ -1,7 +1,7 @@
 import { Scene, GameObjects, Scenes } from 'phaser';
 import { Shepherd } from '../entities/Shepherd';
 import { Wolf } from '../entities/Wolf';
-import { FOLLOW_DISTANCE, FOLLOW_SPEED, Sheep } from '../entities/Sheep';
+import { FOLLOW_DISTANCE, FOLLOW_SPEED, PET_DANCE_MS, Sheep } from '../entities/Sheep';
 import {
     findPointAwayFromAll,
     WORLD_HEIGHT,
@@ -421,9 +421,13 @@ export class WorldScene extends Scene {
         }
 
         this.shepherd.beginPetting(sheep.sprite.x, sheep.sprite.y);
-        sheep.beginHappyDance();
-        playHappyBaah(this, sheep, this.shepherd.sprite);
-        spawnPetHeart(this, sheep.sprite.x, sheep.sprite.y);
+        const hand = this.shepherd.petHandPosition();
+        sheep.approachForPet(hand.x, hand.y, () => {
+            this.shepherd.extendPettingFor(PET_DANCE_MS);
+            sheep.beginHappyDance();
+            playHappyBaah(this, sheep, this.shepherd.sprite);
+            spawnPetHeart(this, sheep.sprite.x, sheep.sprite.y);
+        });
 
         // Walk-into pets only: skip while playLines/scripture is speaking (find cue is enough).
         if (!this.scriptPlaying) {

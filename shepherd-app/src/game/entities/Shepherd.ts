@@ -4,12 +4,10 @@ import { KeepOutZone, pushOutsideKeepOuts } from './Sheep';
 
 const SPEED = 180;
 const ARRIVE_DISTANCE = 8;
-const SHEPHERD_W = 48;
-const SHEPHERD_H = 48;
+const SHEPHERD_W = 80;
+const SHEPHERD_H = 80;
 const SHADOW_OFFSET = 20;
 const PET_MS = 1800;
-const PET_KNEEL_ANGLE = 22;
-const PET_SCALE_Y = 0.82;
 
 export class Shepherd {
     readonly sprite: GameObjects.Sprite;
@@ -36,11 +34,10 @@ export class Shepherd {
         this.shadow = scene.add.image(x, y + SHADOW_OFFSET, 'shepherd-shadow');
 
         this.sprite = scene.physics.add.sprite(x, y, 'shepherd');
-        this.sprite.setDisplaySize(SHEPHERD_W, SHEPHERD_H);
         this.body = this.sprite.body as Physics.Arcade.Body;
+        this.applyDisplaySize();
         this.placeShadow();
         this.body.setCollideWorldBounds(true);
-        this.body.setCircle(14, 8, 10);
 
         const keyboard = scene.input.keyboard;
         this.keys = keyboard
@@ -155,9 +152,30 @@ export class Shepherd {
         this.arriveCallback = null;
         this.body.setVelocity(0, 0);
         this.sprite.setFlipX(sheepX < this.sprite.x);
-        this.sprite.setAngle(this.sprite.flipX ? -PET_KNEEL_ANGLE : PET_KNEEL_ANGLE);
-        this.sprite.setScale(1.04, PET_SCALE_Y);
+        this.applyTexture();
         this.placeShadow();
+    }
+
+    /** Keep kneeling through the sheep's happy dance after it reaches the hand. */
+    extendPettingFor (durationMs: number): void {
+        if (this.lyingDown) {
+            return;
+        }
+
+        const now = this.sprite.scene.time.now;
+        this.pettingUntil = now + durationMs;
+    }
+
+    /** World point at the kneeling reach — sheep walk here before dancing. */
+    petHandPosition (): { x: number; y: number } {
+        const sign = this.sprite.flipX ? -1 : 1;
+        const w = this.sprite.displayWidth;
+        const h = this.sprite.displayHeight;
+
+        return {
+            x: this.sprite.x + sign * w * 0.30,
+            y: this.sprite.y + h * 0.10
+        };
     }
 
     lieDown (x: number, y: number): void {
@@ -168,7 +186,7 @@ export class Shepherd {
         this.target = null;
         this.sprite.setPosition(x, y);
         this.sprite.setAngle(90);
-        this.sprite.setScale(1, 1);
+        this.applyDisplaySize();
         this.body.setVelocity(0, 0);
         this.body.setImmovable(true);
         this.placeShadow();
@@ -181,18 +199,32 @@ export class Shepherd {
         this.pettingUntil = 0;
         this.target = null;
         this.sprite.setAngle(0);
-        this.sprite.setScale(1, 1);
+        this.applyDisplaySize();
         this.body.setImmovable(false);
         this.body.setVelocity(0, 0);
         this.placeShadow();
     }
 
     private applyTexture (): void {
+        const kneeling = this.isPetting;
         const key = this.whiteRobe
-            ? (this.staffEquipped ? 'shepherd-staff-white' : 'shepherd-white')
-            : (this.staffEquipped ? 'shepherd-staff' : 'shepherd');
+            ? (this.staffEquipped
+                ? (kneeling ? 'shepherd-kneel-staff-white' : 'shepherd-staff-white')
+                : (kneeling ? 'shepherd-kneel-white' : 'shepherd-white'))
+            : (this.staffEquipped
+                ? (kneeling ? 'shepherd-kneel-staff' : 'shepherd-staff')
+                : (kneeling ? 'shepherd-kneel' : 'shepherd'));
         this.sprite.setTexture(key);
-        this.sprite.setDisplaySize(SHEPHERD_W, SHEPHERD_H);
+        this.applyDisplaySize();
+    }
+
+    /** Keep PNG art at game scale — setScale(1,1) would revert to native 1024px. */
+    private applyDisplaySize (scaleX = 1, scaleY = 1): void {
+        this.sprite.setDisplaySize(SHEPHERD_W * scaleX, SHEPHERD_H * scaleY);
+        const body = this.body;
+        const wRatio = this.sprite.displayWidth / SHEPHERD_W;
+        const hRatio = this.sprite.displayHeight / SHEPHERD_H;
+        body.setCircle(Math.round(14 * wRatio), Math.round(8 * wRatio), Math.round(10 * hRatio));
     }
 
     update (keepOuts: KeepOutZone[] = []): void {
@@ -305,7 +337,7 @@ export class Shepherd {
     private endPetting (): void {
         this.pettingUntil = 0;
         this.sprite.setAngle(0);
-        this.sprite.setScale(1, 1);
+        this.applyTexture();
         this.placeShadow();
     }
 
@@ -334,7 +366,10 @@ export class Shepherd {
 }
 
 function ensureShepherdTextures (scene: Scene): void {
-    const keys = ['shepherd', 'shepherd-staff', 'shepherd-white', 'shepherd-staff-white'];
+    const keys = [
+        'shepherd', 'shepherd-staff', 'shepherd-white', 'shepherd-staff-white',
+        'shepherd-kneel', 'shepherd-kneel-staff', 'shepherd-kneel-white', 'shepherd-kneel-staff-white'
+    ];
 
     if (keys.every((key) => scene.textures.exists(key))) {
         return;
