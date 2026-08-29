@@ -18,9 +18,11 @@ export class Shepherd {
     private staffEquipped = false;
     private lyingDown = false;
     private whiteRobe = false;
+    private sitting = false;
     private pettingUntil = 0;
     /** Scripted walk / rescue — blocks player steer until clearGuidance(). */
     private guided = false;
+    private guidedSpeed = SPEED;
     private arriveCallback: (() => void) | null = null;
     /** Unit vector of last non-zero velocity (flock trails opposite this). */
     private moveDirX = 1;
@@ -49,7 +51,7 @@ export class Shepherd {
                 return;
             }
 
-            if (this.isPetting || this.lyingDown || this.guided) {
+            if (this.isPetting || this.lyingDown || this.guided || this.sitting) {
                 return;
             }
 
@@ -71,6 +73,10 @@ export class Shepherd {
 
     get isLyingDown (): boolean {
         return this.lyingDown;
+    }
+
+    get isSitting (): boolean {
+        return this.sitting;
     }
 
     get isGuided (): boolean {
@@ -123,12 +129,13 @@ export class Shepherd {
      * Walk to a point under script control (e.g. hole rescue).
      * Player input stays locked until clearGuidance().
      */
-    guideTo (x: number, y: number, onArrive: () => void): void {
+    guideTo (x: number, y: number, onArrive: () => void, speed = SPEED): void {
         if (this.lyingDown) {
             return;
         }
 
         this.guided = true;
+        this.guidedSpeed = speed;
         this.arriveCallback = onArrive;
         this.target = this.clampToKeepOuts(x, y);
         this.body.setVelocity(0, 0);
@@ -136,6 +143,7 @@ export class Shepherd {
 
     clearGuidance (): void {
         this.guided = false;
+        this.guidedSpeed = SPEED;
         this.arriveCallback = null;
         this.target = null;
         this.body.setVelocity(0, 0);
@@ -178,8 +186,34 @@ export class Shepherd {
         };
     }
 
+    /** Kneel in place (picnic / shade) until standUp(). */
+    sit (): void {
+        if (this.lyingDown) {
+            return;
+        }
+
+        this.sitting = true;
+        this.guided = true;
+        this.target = null;
+        this.arriveCallback = null;
+        this.pettingUntil = 0;
+        this.body.setVelocity(0, 0);
+        this.applyTexture();
+        this.placeShadow();
+    }
+
+    standUp (): void {
+        this.sitting = false;
+        this.guided = false;
+        this.arriveCallback = null;
+        this.target = null;
+        this.applyTexture();
+        this.placeShadow();
+    }
+
     lieDown (x: number, y: number): void {
         this.lyingDown = true;
+        this.sitting = false;
         this.guided = false;
         this.arriveCallback = null;
         this.pettingUntil = 0;
@@ -194,6 +228,7 @@ export class Shepherd {
 
     wake (): void {
         this.lyingDown = false;
+        this.sitting = false;
         this.guided = false;
         this.arriveCallback = null;
         this.pettingUntil = 0;
@@ -206,7 +241,7 @@ export class Shepherd {
     }
 
     private applyTexture (): void {
-        const kneeling = this.isPetting;
+        const kneeling = this.isPetting || this.sitting;
         const key = this.whiteRobe
             ? (this.staffEquipped
                 ? (kneeling ? 'shepherd-kneel-staff-white' : 'shepherd-staff-white')
@@ -231,6 +266,12 @@ export class Shepherd {
         this.keepOuts = keepOuts;
 
         if (this.lyingDown) {
+            this.body.setVelocity(0, 0);
+            this.placeShadow();
+            return;
+        }
+
+        if (this.sitting) {
             this.body.setVelocity(0, 0);
             this.placeShadow();
             return;
@@ -281,7 +322,7 @@ export class Shepherd {
             }
 
             this.body.setVelocity(dx, dy);
-            this.body.velocity.normalize().scale(SPEED);
+            this.body.velocity.normalize().scale(this.guided ? this.guidedSpeed : SPEED);
             this.faceVelocity();
             this.applyKeepOutPush();
             this.placeShadow();

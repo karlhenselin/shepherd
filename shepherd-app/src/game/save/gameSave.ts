@@ -1,6 +1,6 @@
 const SAVE_KEY = 'shepherd-save';
 
-export type StoryCheckpoint = 'psalm-23-1' | 'psalm-23-2' | 'isaiah-53-6' | 'psalm-23-3' | 'psalm-23-3b' | 'psalm-23-4a' | 'psalm-23-4b' | 'psalm-23-4c' | 'found-staff' | 'john-10-2' | 'john-10-9' | '1-cor-15-51' | 'hurt-sheep' | 'found-sheep' | 'found-gem';
+export type StoryCheckpoint = 'psalm-23-1' | 'psalm-23-2' | 'isaiah-53-6' | 'psalm-23-3' | 'psalm-23-3b' | 'psalm-23-4a' | 'psalm-23-4b' | 'psalm-23-4c' | 'psalm-23-5' | 'psalm-23-6' | 'found-staff' | 'john-10-2' | 'john-10-9' | '1-cor-15-51' | 'hurt-sheep' | 'found-sheep' | 'found-gem';
 
 export type SavedPoint = { x: number; y: number };
 
@@ -19,6 +19,8 @@ export type GameSave = {
     heardPsalm4a?: boolean;
     heardPsalm4b?: boolean;
     heardPsalm4c?: boolean;
+    heardPsalm5?: boolean;
+    heardPsalm6?: boolean;
     heardJohn102?: boolean;
     heardJohn109?: boolean;
     heardCorinthians?: boolean;
@@ -30,6 +32,8 @@ export type GameSave = {
     water?: SavedPoint[];
     grass?: SavedPoint[];
     foundGems?: string[];
+    foundWaterVerses?: string[];
+    foundTreeVerses?: string[];
     /** Logical Play Games achievement ids already earned (local queue). */
     unlockedAchievements?: string[];
     /** Active world BGM key (`wanderlust` / `wonders-of-nature`). Optional for older saves. */

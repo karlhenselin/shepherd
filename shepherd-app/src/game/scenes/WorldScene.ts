@@ -10,13 +10,13 @@ import {
     PASTURE_COL,
     PASTURE_ROW,
     regionCenter,
-    startCenter,
-    WATER_COL,
-    WATER_ROW
+    startCenter
 } from '../world/constants';
 import { GrassPatch, placePasture } from '../world/GrassPatch';
-import { WaterSource } from '../world/WaterSource';
+import { WaterSource, placeWaters } from '../world/WaterSource';
 import { Sheepfold } from '../world/Sheepfold';
+import { Picnic } from '../world/Picnic';
+import { ShadeTree, placeShadeTrees } from '../world/ShadeTree';
 import { Hole, HOLE_KEEP_OUT_RADIUS } from '../world/Hole';
 import { Thorns, THORN_SNARE_RADIUS, placeThorns } from '../world/Thorns';
 import { StaffPickup } from '../world/StaffPickup';
@@ -28,7 +28,9 @@ import { startHowling, stopHowling, suspendHowling, syncHowling, unsuspendHowlin
 import { isSoundOn, setSoundOn } from '../audio/soundPref';
 import { WANDERLUST_KEY, WONDERS_KEY, applySavedWorldMusic, clearWorldMusicProgress, clearWorldMusicSeek, fadeInWorldMusic, fadeOutWorldMusic, getWorldMusicProgress, isWorldMusicKey, setWorldMusicTrack, startWorldMusic, stopWorldMusic } from '../audio/worldMusic';
 import { cueWaitingBleat, holdSheepSounds, playHappyBaah, playLaggingBaah, playStrayBaah, stopSheepSounds, tickNightBaahs as tickNightFlockBaahs, tickSheepSounds } from '../audio/sheepSounds';
-import { corinthians15Line, isaiah53Line, john10Line, psalm23Comfort, psalm23Half } from '../data/scripture';
+import { corinthians15Line, isaiah53Line, john10Line, john14Line, psalm23Comfort, psalm23FiveTable, psalm23Half } from '../data/scripture';
+import { nextWaterVerseId, waterVerseLine } from '../data/waterVerses';
+import { nextTreeVerseId, treeVerseLine } from '../data/treeVerses';
 import { BibleGemHint } from '../ui/BibleGemHint';
 import { LostSheepHint } from '../ui/LostSheepHint';
 import { spawnPetHeart } from '../ui/petHeart';
@@ -59,13 +61,19 @@ const BANDAGE_KNEEL_MS = 2000;
 const BANDAGE_HEAL_AT_MS = 650;
 /** After a rescue, thorns stay off until the shepherd walks this far. */
 const THORN_REARM_WALK = 300;
-const HOLE_ASIDE_DIST = 118;
+/** After a shade sit, stay off until the shepherd walks this far from the tree (pets + revisit). */
+const TREE_REST_COOLDOWN_PX = 300;
+const HOLE_ASIDE_DIST = 156;
 const HOLE_ENTER_NUDGE = 16;
 /** Pause stray teleport / lag warning and walk-into petting while shepherd is this close to the hole. */
 const HOLE_PROXIMITY_PAUSE = 200;
 const WALK_A_BIT = 420;
 /** After the flock is settled in the pen, wait this long before lying down. */
 const PEN_SLEEP_DELAY_MS = 1000;
+/** After Psalm 23:5, stand and walk to the gate before lying down. */
+const TABLE_GATE_PAUSE_MS = 3000;
+/** Slow walk from the picnic to the south opening. */
+const TABLE_GATE_WALK_SPEED = 58;
 /** Pause after the scare beat before speaking Psalm 23:4b. */
 const FEAR_NO_EVIL_DELAY_MS = 3000;
 const NIGHT_VEIL_ALPHA = 0.55;
@@ -103,6 +111,9 @@ export class WorldScene extends Scene {
     private flock: Sheep[] = [];
     private grass: GrassPatch[] = [];
     private water: WaterSource[] = [];
+    private trees: ShadeTree[] = [];
+    private picnic: Picnic | null = null;
+    private tableWolves: Wolf[] = [];
     private sheepfold: Sheepfold | null = null;
     private hole: Hole | null = null;
     private thorns: Thorns[] = [];
@@ -113,6 +124,15 @@ export class WorldScene extends Scene {
     private staffPickup: StaffPickup | null = null;
     private gems: BibleGem[] = [];
     private foundGems: string[] = [];
+    private foundWaterVerses: string[] = [];
+    private foundTreeVerses: string[] = [];
+    private penTableStarted = false;
+    /** Walk into the south opening without fence keep-outs, then lie down as the gate. */
+    private walkingToGate = false;
+    private waterVisit: WaterSource | null = null;
+    private treeVisit: ShadeTree | null = null;
+    /** After a shade sit, locked until the shepherd walks `TREE_REST_COOLDOWN_PX` from the tree. */
+    private treePetFrom: { x: number; y: number } | null = null;
     private lastCheckpoint: StoryCheckpoint | null = null;
     private nightVeil!: GameObjects.Rectangle;
     private cueText!: GameObjects.Text;
@@ -124,6 +144,8 @@ export class WorldScene extends Scene {
     private scriptPlaying = false;
     /** Gem verses waiting until the current spoken script finishes. */
     private gemVerseQueue: string[] = [];
+    /** Tree verse waiting until current speech finishes (sit happens immediately). */
+    private pendingTreeVerseId: string | null = null;
     private strayReadyAt = 0;
     private lagWarned = new WeakSet<Sheep>();
     private lostHint!: LostSheepHint;
@@ -138,6 +160,8 @@ export class WorldScene extends Scene {
     private heardPsalm4a = false;
     private heardPsalm4b = false;
     private heardPsalm4c = false;
+    private heardPsalm5 = false;
+    private heardPsalm6 = false;
     private heardJohn102 = false;
     private heardJohn109 = false;
     private heardCorinthians = false;
@@ -199,10 +223,10 @@ export class WorldScene extends Scene {
         this.cameras.main.centerOn(this.shepherd.sprite.x, this.shepherd.sprite.y);
         this.cameras.main.startFollow(this.shepherd.sprite, true, 0.12, 0.12);
 
-        const waterAt = regionCenter(WATER_COL, WATER_ROW);
-        this.water = save?.water?.length
-            ? save.water.map((point) => new WaterSource(this, point.x, point.y))
-            : [new WaterSource(this, waterAt.x, waterAt.y)];
+        this.water = save?.water && save.water.length >= 5
+            ? save.water.map((point, i) => new WaterSource(this, point.x, point.y, i === 0 ? 1 : 0.5))
+            : placeWaters(this);
+        this.trees = placeShadeTrees(this);
 
         if (save?.grass?.length) {
             this.grass = save.grass.map((point) => new GrassPatch(this, point.x, point.y));
@@ -246,6 +270,8 @@ export class WorldScene extends Scene {
 
         if (save) {
             this.foundGems = save.foundGems ?? [];
+            this.foundWaterVerses = save.foundWaterVerses ?? [];
+            this.foundTreeVerses = save.foundTreeVerses ?? [];
             this.lastCheckpoint = save.checkpoint;
 
             // Seed before restoreSave — restore may start/stop BGM (dawn wake / night).
@@ -360,6 +386,7 @@ export class WorldScene extends Scene {
         this.tickNightDarkness();
         this.tickNightBaahs();
         this.tickWolf(delta);
+        this.tickTableWolves(delta);
         this.tickThorns();
         this.sheepfold?.tickGlow(this.nightVeil.alpha, this.time.now);
         tickSheepSounds(this, this.flock, this.shepherd.sprite, this.nightStarted);
@@ -372,6 +399,8 @@ export class WorldScene extends Scene {
         this.maybeHowl();
         this.maybePickupStaff();
         this.maybeCollectGem();
+        this.maybeWaysideWater();
+        this.maybeShadeTree();
         this.maybeReachPen();
     }
 
@@ -404,6 +433,10 @@ export class WorldScene extends Scene {
             this.loadPetsLocked = false;
         }
 
+        if (this.treePetFrom && this.treeRestOnCooldown()) {
+            return;
+        }
+
         if (
             this.time.now < this.pettingReadyAt
             || this.nightStarted
@@ -411,6 +444,7 @@ export class WorldScene extends Scene {
             || this.bandageRescuing
             || this.isNearHole()
             || this.shepherd.isLyingDown
+            || this.shepherd.isSitting
             || this.shepherd.isPetting
             || this.shepherd.isGuided
         ) {
@@ -529,17 +563,29 @@ export class WorldScene extends Scene {
     }
 
     private onDrank (sheep: Sheep): void {
-        if (this.heardPsalm2b) {
+        if (!this.heardPsalm2b) {
+            this.heardPsalm2b = true;
+            this.playLines([
+                `${sheep.name} is drinking.`,
+                psalm23Half(2, 'b')
+            ], () => {
+                this.spawnNextSheep();
+            });
             return;
         }
 
-        this.heardPsalm2b = true;
+        const verseId = nextWaterVerseId(this.foundWaterVerses);
+
+        if (!verseId || this.scriptPlaying) {
+            return;
+        }
+
+        this.foundWaterVerses.push(verseId);
+        this.saveProgress(this.lastCheckpoint ?? 'found-gem');
         this.playLines([
             `${sheep.name} is drinking.`,
-            psalm23Half(2, 'b')
-        ], () => {
-            this.spawnNextSheep();
-        });
+            waterVerseLine(verseId)
+        ]);
     }
 
     private playLines (lines: string[], onDone?: () => void): void {
@@ -563,10 +609,16 @@ export class WorldScene extends Scene {
             this.scriptPlaying = false;
             onDone?.();
 
-            // Restore direction text on screen only — do not re-speak after scripture/gem lines.
-            if (!this.scriptPlaying) {
-                this.showCue(this.flockCue(), false);
+            if (this.scriptPlaying) {
+                return;
             }
+
+            if (this.flushPendingTreeVerse()) {
+                return;
+            }
+
+            // Restore direction text on screen only — do not re-speak after scripture/gem lines.
+            this.showCue(this.flockCue(), false);
 
             return;
         }
@@ -780,6 +832,14 @@ export class WorldScene extends Scene {
             this.heardPsalm4c = true;
         }
 
+        if (checkpoint === 'psalm-23-5') {
+            this.heardPsalm5 = true;
+        }
+
+        if (checkpoint === 'psalm-23-6') {
+            this.heardPsalm6 = true;
+        }
+
         if (checkpoint === 'john-10-2') {
             this.heardJohn102 = true;
         }
@@ -817,6 +877,8 @@ export class WorldScene extends Scene {
             heardPsalm4a: this.heardPsalm4a,
             heardPsalm4b: this.heardPsalm4b,
             heardPsalm4c: this.heardPsalm4c,
+            heardPsalm5: this.heardPsalm5,
+            heardPsalm6: this.heardPsalm6,
             heardJohn102: this.heardJohn102,
             heardJohn109: this.heardJohn109,
             heardCorinthians: this.heardCorinthians,
@@ -830,6 +892,8 @@ export class WorldScene extends Scene {
             water: this.water.map((source) => ({ x: source.x, y: source.y })),
             grass: this.grass.map((patch) => ({ x: patch.x, y: patch.y })),
             foundGems: [...this.foundGems],
+            foundWaterVerses: [...this.foundWaterVerses],
+            foundTreeVerses: [...this.foundTreeVerses],
             unlockedAchievements: previous?.unlockedAchievements ?? [],
             musicKey: music.key,
             musicSeek: music.seek
@@ -847,9 +911,13 @@ export class WorldScene extends Scene {
         this.heardPsalm4a = save.heardPsalm4a === true;
         this.heardPsalm4b = save.heardPsalm4b === true;
         this.heardPsalm4c = save.heardPsalm4c === true;
+        this.heardPsalm5 = save.heardPsalm5 === true;
+        this.heardPsalm6 = save.heardPsalm6 === true;
         this.heardJohn102 = save.heardJohn102 === true;
         this.heardJohn109 = save.heardJohn109 === true;
         this.heardCorinthians = save.heardCorinthians === true;
+        this.foundWaterVerses = save.foundWaterVerses ?? this.foundWaterVerses;
+        this.foundTreeVerses = save.foundTreeVerses ?? this.foundTreeVerses;
 
         if (save.foundNames.length > 0) {
             this.loadPetsLocked = true;
@@ -947,9 +1015,20 @@ export class WorldScene extends Scene {
         this.flock = [];
         this.grass = [];
         this.water = [];
+        this.trees = [];
+        this.picnic?.destroy();
+        this.picnic = null;
+        this.dismissTableWolves();
+        this.foundWaterVerses = [];
+        this.foundTreeVerses = [];
+        this.penTableStarted = false;
+        this.walkingToGate = false;
+        this.waterVisit = null;
+        this.treeVisit = null;
         this.lastCue = '';
         this.scriptPlaying = false;
         this.gemVerseQueue = [];
+        this.pendingTreeVerseId = null;
         this.nextNames = FLOCK_NAMES.slice(1);
         this.foundCount = 0;
         this.heardPsalm1 = false;
@@ -960,6 +1039,8 @@ export class WorldScene extends Scene {
         this.heardPsalm4a = false;
         this.heardPsalm4b = false;
         this.heardPsalm4c = false;
+        this.heardPsalm5 = false;
+        this.heardPsalm6 = false;
         this.heardJohn102 = false;
         this.heardJohn109 = false;
         this.heardCorinthians = false;
@@ -985,6 +1066,7 @@ export class WorldScene extends Scene {
         this.pettingReadyAt = 0;
         this.loadPetsLocked = false;
         this.petUnlockOrigin = { x: 0, y: 0 };
+        this.treePetFrom = null;
     }
 
     private addSettingsButton (): void {
@@ -1280,6 +1362,7 @@ export class WorldScene extends Scene {
                 }
 
                 hurt.heal();
+                this.parkHealedByFlock(hurt, holeX, holeY);
                 this.playLines([
                     `You bandage ${hurt.name}.`,
                     psalm23Half(3, 'a')
@@ -1309,6 +1392,17 @@ export class WorldScene extends Scene {
         });
     }
 
+    /** After the pit bandage, sit with the waiting flock instead of trail-following into the keep-out. */
+    private parkHealedByFlock (healed: Sheep, holeX: number, holeY: number): void {
+        const aside = this.shepherd.sprite.x < holeX ? -1 : 1;
+        const waiting = this.flock.filter((sheep) => sheep !== healed && sheep.isRescueWaiting);
+        const spread = waiting.length === 0
+            ? 0
+            : (waiting.length - (waiting.length - 1) / 2) * 44;
+
+        healed.beginRescueWait(holeX + aside * HOLE_ASIDE_DIST, holeY + spread - 18);
+    }
+
     private worldKeepOuts (): { x: number; y: number; radius: number }[] {
         const zones: { x: number; y: number; radius: number }[] = [];
 
@@ -1334,7 +1428,7 @@ export class WorldScene extends Scene {
     private shepherdKeepOuts (
         keepOuts: { x: number; y: number; radius: number }[]
     ): { x: number; y: number; radius: number }[] {
-        if (!this.sheepfold || this.shepherd.isLyingDown || this.heardJohn109) {
+        if (!this.sheepfold || this.shepherd.isLyingDown || this.heardJohn109 || this.walkingToGate) {
             return keepOuts;
         }
 
@@ -1359,8 +1453,7 @@ export class WorldScene extends Scene {
         for (const sheep of this.flock) {
             sheep.endRescueWait();
 
-            // Healed sheep sits in pet range of the kneeling shepherd — suppress
-            // walk-into dance so the flock resumes trail follow immediately.
+            // Flock (including the healed sheep) was sitting aside — skip walk-into pets.
             if (sheep.mood === 'following' && !sheep.hurt) {
                 sheep.deferWalkIntoPetting(PETTING_SUPPRESS_MS);
             }
@@ -1431,6 +1524,8 @@ export class WorldScene extends Scene {
         this.scene.pause();
         this.scene.launch('TreasureScene', {
             foundGems: [...this.foundGems],
+            foundWaterVerses: [...this.foundWaterVerses],
+            foundTreeVerses: [...this.foundTreeVerses],
             heard: {
                 heardPsalm1: this.heardPsalm1,
                 heardPsalm2: this.heardPsalm2,
@@ -1440,6 +1535,8 @@ export class WorldScene extends Scene {
                 heardPsalm4a: this.heardPsalm4a,
                 heardPsalm4b: this.heardPsalm4b,
                 heardPsalm4c: this.heardPsalm4c,
+                heardPsalm5: this.heardPsalm5,
+                heardPsalm6: this.heardPsalm6,
                 heardJohn102: this.heardJohn102,
                 heardJohn109: this.heardJohn109,
                 heardCorinthians: this.heardCorinthians
@@ -1652,14 +1749,14 @@ export class WorldScene extends Scene {
             return;
         }
 
-        // Arrival: John 10:2 when the shepherd reaches the pen.
+        // Arrival: John 10:2, then John 14:6, then the flock files in.
         if (!this.heardJohn102) {
             if (this.scriptPlaying || !this.sheepfold.isNear(this.shepherd.sprite.x, this.shepherd.sprite.y)) {
                 return;
             }
 
             stopHowling();
-            this.playLines([john10Line(2)], () => {
+            this.playLines([john10Line(2), john14Line()], () => {
                 this.beginPenning();
             });
             return;
@@ -1686,7 +1783,19 @@ export class WorldScene extends Scene {
             return;
         }
 
-        this.sleepAtGate();
+        // Picnic/wolf beat is in progress — Psalm 23:5 already sets heardPsalm5, so that
+        // flag must not skip ahead to sleep while the pack is still on screen.
+        if (this.penTableStarted) {
+            return;
+        }
+
+        if (this.heardPsalm5 && !this.heardJohn109) {
+            this.sleepAtGate();
+            return;
+        }
+
+        this.penTableStarted = true;
+        this.beginTableSequence();
     }
 
     /** Line up south of the gate, file through the opening, then rest inside. */
@@ -1711,11 +1820,242 @@ export class WorldScene extends Scene {
         return this.flock.length > 0 && this.flock.every((sheep) => sheep.isSettledInPen);
     }
 
+    /** Picnic and Psalm 23:5, a short pause, then lie down as the gate. */
+    private beginTableSequence (): void {
+        this.dismissWolf();
+        const fold = this.ensurePen();
+        const fire = fold.fireSpot();
+        this.picnic = new Picnic(this, fire.x - 78, fire.y + 32);
+        const sit = this.picnic.sitSpot();
+        this.shepherd.guideTo(sit.x, sit.y, () => {
+            this.shepherd.sit();
+            this.tableEnemiesApproach(fire);
+            this.playLines([psalm23FiveTable()], () => this.pauseThenSleepAtGate());
+        });
+    }
+
+    private tableEnemiesApproach (fire: { x: number; y: number }): void {
+        startHowling(this);
+        const rim = 190;
+        const angles = [-0.55, -0.22, 0.12];
+
+        for (const angle of angles) {
+            const spawn = this.offCameraAlong(fire.x, fire.y, angle);
+            const wolf = new Wolf(this, spawn.x, spawn.y);
+            wolf.placeAt(spawn.x, spawn.y);
+            this.tableWolves.push(wolf);
+            wolf.walkTo(
+                fire.x + Math.cos(angle) * rim,
+                fire.y + Math.sin(angle) * rim,
+                96,
+                () => wolf.hold()
+            );
+        }
+    }
+
+    /** First point past the camera edge along a ray, so wolves walk in instead of popping on-screen. */
+    private offCameraAlong (fromX: number, fromY: number, angle: number): { x: number; y: number } {
+        const view = this.cameras.main.worldView;
+        const dx = Math.cos(angle);
+        const dy = Math.sin(angle);
+        const margin = 72;
+        const hits: number[] = [];
+
+        if (dx > 0.001) {
+            hits.push((view.right + margin - fromX) / dx);
+        }
+
+        if (dx < -0.001) {
+            hits.push((view.left - margin - fromX) / dx);
+        }
+
+        if (dy > 0.001) {
+            hits.push((view.bottom + margin - fromY) / dy);
+        }
+
+        if (dy < -0.001) {
+            hits.push((view.top - margin - fromY) / dy);
+        }
+
+        const t = hits.filter((dist) => dist > 0).reduce((a, b) => Math.min(a, b), Infinity);
+        const dist = Number.isFinite(t) ? t : 640;
+
+        return { x: fromX + dx * dist, y: fromY + dy * dist };
+    }
+
+    private pauseThenSleepAtGate (): void {
+        this.scriptPlaying = true;
+        this.picnic?.fadeOut();
+        this.picnic = null;
+        this.shepherd.standUp();
+        this.walkingToGate = true;
+        const gate = this.ensurePen().gateSpot();
+        const lieAt = this.time.now + TABLE_GATE_PAUSE_MS;
+        this.shepherd.guideTo(gate.x, gate.y, () => {
+            const wait = Math.max(0, lieAt - this.time.now);
+            this.time.delayedCall(wait, () => {
+                if (this.sys.isActive()) {
+                    this.sleepAtGate();
+                }
+            });
+        }, TABLE_GATE_WALK_SPEED);
+    }
+
+    private dismissTableWolves (): void {
+        for (const wolf of this.tableWolves) {
+            wolf.destroy();
+        }
+
+        this.tableWolves = [];
+    }
+
+    private tickTableWolves (delta: number): void {
+        const flock = this.wolfFlockPoints();
+
+        for (const wolf of this.tableWolves) {
+            wolf.update(this.shepherd, delta, flock);
+        }
+    }
+
+    private maybeWaysideWater (): void {
+        if (this.nightStarted || this.scriptPlaying || this.bandageRescuing || this.penTableStarted) {
+            this.waterVisit = null;
+            return;
+        }
+
+        const pond = this.water.find((source) => source.isNear(this.shepherd.sprite.x, this.shepherd.sprite.y));
+
+        if (!pond) {
+            this.waterVisit = null;
+            return;
+        }
+
+        if (this.waterVisit === pond) {
+            return;
+        }
+
+        this.waterVisit = pond;
+
+        for (const sheep of this.flock) {
+            if (sheep.mood === 'following' && !sheep.hurt) {
+                sheep.thirsty = true;
+            }
+        }
+    }
+
+    private maybeShadeTree (): void {
+        const tree = this.trees.find((item) => item.inShade(this.shepherd.sprite.x, this.shepherd.sprite.y));
+
+        if (!tree) {
+            this.treeVisit = null;
+            return;
+        }
+
+        if (this.treeRestOnCooldown()) {
+            this.treeVisit = tree;
+            return;
+        }
+
+        if (
+            this.nightStarted
+            || this.bandageRescuing
+            || this.shepherd.isLyingDown
+            || this.shepherd.isSitting
+            || this.shepherd.isGuided
+            || this.pendingTreeVerseId
+        ) {
+            return;
+        }
+
+        if (this.treeVisit === tree) {
+            return;
+        }
+
+        const verseId = nextTreeVerseId(this.foundTreeVerses, this.shepherd.wearsWhite);
+
+        if (!verseId) {
+            this.treeVisit = tree;
+            return;
+        }
+
+        this.treeVisit = tree;
+        this.treePetFrom = { x: tree.x, y: tree.y };
+        this.shepherd.sit();
+        this.flock.forEach((sheep, slot) => {
+            if (sheep.mood === 'following' && !sheep.hurt) {
+                const gather = tree.gatherSpot(slot, this.flock.length);
+                sheep.beginRescueWait(gather.x, gather.y);
+            }
+        });
+        this.foundTreeVerses.push(verseId);
+        this.saveProgress(this.lastCheckpoint ?? 'found-gem');
+        this.beginTreeVerse(verseId);
+    }
+
+    private beginTreeVerse (verseId: string): void {
+        if (this.scriptPlaying) {
+            this.pendingTreeVerseId = verseId;
+            return;
+        }
+
+        this.speakTreeVerse(verseId);
+    }
+
+    private flushPendingTreeVerse (): boolean {
+        const verseId = this.pendingTreeVerseId;
+
+        if (!verseId) {
+            return false;
+        }
+
+        this.speakTreeVerse(verseId);
+        return true;
+    }
+
+    private speakTreeVerse (verseId: string): void {
+        this.pendingTreeVerseId = null;
+        this.playLines([treeVerseLine(verseId)], () => {
+            if (!this.sys.isActive()) {
+                return;
+            }
+
+            this.shepherd.standUp();
+            this.shepherd.clearGuidance();
+
+            for (const sheep of this.flock) {
+                sheep.endRescueWait();
+            }
+        });
+    }
+
+    /** True while the shepherd still needs to walk farther from the last shade tree. */
+    private treeRestOnCooldown (): boolean {
+        if (!this.treePetFrom) {
+            return false;
+        }
+
+        const dist = Math.hypot(
+            this.shepherd.sprite.x - this.treePetFrom.x,
+            this.shepherd.sprite.y - this.treePetFrom.y
+        );
+
+        if (dist >= TREE_REST_COOLDOWN_PX) {
+            this.treePetFrom = null;
+            this.treeVisit = null;
+            return false;
+        }
+
+        return true;
+    }
+
     /** Lie down in the gate (John 10:9) and fade into the mystery sleep beat. */
     private sleepAtGate (): void {
         const fold = this.ensurePen();
         const gate = fold.gateSpot();
         this.dismissWolf();
+        this.dismissTableWolves();
+        stopHowling();
+        this.walkingToGate = false;
         this.shepherd.lieDown(gate.x, gate.y);
         this.playLines([john10Line(9)], () => {
             this.time.delayedCall(1000, () => {
@@ -1743,6 +2083,7 @@ export class WorldScene extends Scene {
         this.nightFadeInMs = 0;
         this.nightVeil.setAlpha(0);
         this.sleepVeil.setAlpha(0);
+        this.penTableStarted = false;
         this.styleCueForDay();
         stopHowling();
         this.dismissWolf();
@@ -1801,7 +2142,10 @@ export class WorldScene extends Scene {
         this.styleCueForDay();
         this.shepherd.wake();
         this.releaseFlockFromPen(this.fold());
+        this.penTableStarted = false;
         this.dismissWolf();
+        this.dismissTableWolves();
+        stopHowling();
         // Crossing night resets seek; morning track always starts at 0.
         clearWorldMusicSeek();
         setWorldMusicTrack(this, WONDERS_KEY);
@@ -1853,7 +2197,14 @@ export class WorldScene extends Scene {
             return;
         }
 
-        this.wolf.update(this.shepherd, delta);
+        this.wolf.update(this.shepherd, delta, this.wolfFlockPoints());
+    }
+
+    /** Sheep the night wolf should stalk — following flock and penned fold. */
+    private wolfFlockPoints (): { x: number; y: number }[] {
+        return this.flock
+            .filter((sheep) => sheep.mood === 'following' || sheep.mood === 'penned')
+            .map((sheep) => ({ x: sheep.sprite.x, y: sheep.sprite.y }));
     }
 
     private ensureWolf (): void {
@@ -2048,6 +2399,14 @@ function checkpointForLine (line: string): StoryCheckpoint | null {
 
     if (line.includes('Psalm 23:3')) {
         return 'psalm-23-3';
+    }
+
+    if (line.includes('Psalm 23:6')) {
+        return 'psalm-23-6';
+    }
+
+    if (line.includes('Psalm 23:5')) {
+        return 'psalm-23-5';
     }
 
     if (line.includes('Psalm 23:4c')) {

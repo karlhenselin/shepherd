@@ -32,11 +32,20 @@ export const PSALM_23 = {
     },
     5: {
         ref: 'Psalm 23:5',
-        text: 'You prepare a table before me in the presence of my enemies. You anoint my head with oil; my cup overflows.'
+        text: 'You prepare a table before me in the presence of my enemies. You anoint my head with oil; my cup overflows.',
+        a: { ref: 'Psalm 23:5a', text: 'You prepare a table before me' },
+        b: { ref: 'Psalm 23:5b', text: 'in the presence of my enemies.' },
+        c: { ref: 'Psalm 23:5c', text: 'You anoint my head with oil; my cup overflows.' },
+        table: {
+            ref: 'Psalm 23:5',
+            text: 'You prepare a table before me in the presence of my enemies.'
+        }
     },
     6: {
         ref: 'Psalm 23:6',
-        text: 'Surely goodness and mercy will follow me all the days of my life, and I will dwell in the house of the LORD forever.'
+        text: 'Surely goodness and mercy will follow me all the days of my life, and I will dwell in the house of the LORD forever.',
+        a: { ref: 'Psalm 23:6a', text: 'Surely goodness and mercy will follow me all the days of my life,' },
+        b: { ref: 'Psalm 23:6b', text: 'and I will dwell in the house of the LORD forever.' }
     }
 } as const;
 
@@ -47,6 +56,16 @@ export function psalm23Line (verse: 1 | 2 | 3 | 4): string {
 
 export function psalm23Half (verse: 1 | 2 | 3 | 4, half: 'a' | 'b'): string {
     const line = PSALM_23[verse][half];
+    return `${line.text} — ${line.ref}`;
+}
+
+export function psalm23FiveTable (): string {
+    const line = PSALM_23[5].table;
+    return `${line.text} — ${line.ref}`;
+}
+
+export function psalm23Six (part: 'a' | 'b'): string {
+    const line = PSALM_23[6][part];
     return `${line.text} — ${line.ref}`;
 }
 
@@ -86,6 +105,15 @@ export const JOHN_10 = {
 export function john10Line (verse: 2 | 9 | 11): string {
     const line = JOHN_10[verse];
     return `${line.text} — ${line.ref}`;
+}
+
+export const JOHN_14_6 = {
+    ref: 'John 14:6',
+    text: 'I am the way and the truth and the life.'
+} as const;
+
+export function john14Line (): string {
+    return `${JOHN_14_6.text} — ${JOHN_14_6.ref}`;
 }
 
 export function scriptureLine (passage: { ref: string; text: string }): string {
@@ -180,7 +208,11 @@ export const STORY_PASSAGES = [
     PSALM_23[4].a,
     PSALM_23[4].b,
     PSALM_23[4].c,
+    PSALM_23[5].table,
+    PSALM_23[6].a,
+    PSALM_23[6].b,
     JOHN_10[2],
+    JOHN_14_6,
     JOHN_10[9],
     CORINTHIANS_15_51
 ] as const;
@@ -194,6 +226,8 @@ export type StoryPassageFlags = {
     heardPsalm4a?: boolean;
     heardPsalm4b?: boolean;
     heardPsalm4c?: boolean;
+    heardPsalm5?: boolean;
+    heardPsalm6?: boolean;
     heardJohn102?: boolean;
     heardJohn109?: boolean;
     heardCorinthians?: boolean;
@@ -234,8 +268,16 @@ export function unlockedStoryPassages (flags: StoryPassageFlags): { ref: string;
         unlocked.push(PSALM_23[4].c);
     }
 
+    if (flags.heardPsalm5) {
+        unlocked.push(PSALM_23[5].table);
+    }
+
+    if (flags.heardPsalm6) {
+        unlocked.push(PSALM_23[6].a, PSALM_23[6].b);
+    }
+
     if (flags.heardJohn102) {
-        unlocked.push(JOHN_10[2]);
+        unlocked.push(JOHN_10[2], JOHN_14_6);
     }
 
     if (flags.heardJohn109) {

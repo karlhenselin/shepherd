@@ -1,0 +1,31 @@
+# Content ideas — more to do before the fold
+
+The campaign currently runs find → feed → find → water → hole → night → staff → pen → dawn. These beat ideas add activity without turning it into combat or quizzes. Prefer one extra day-beat before night, or a short second morning after 1 Corinthians 15:51.
+
+## Before the pen (same day)
+
+1. **Still waters, then a crossing** — After drinking, a shallow wash or stepping-stones stream. Sheep hesitate; tap to call them across. Speaks *He leads me beside still waters* as they commit, not as a title card.
+2. **Shade at noon** — A lone tree. If you walk too long in open ground the flock lags; rest in shade and a sheep lies down. Soft *He makes me lie down in green pastures* echo if you haven't used it yet.
+3. **The strayed twin** — One named sheep (Snowball) peels toward a distant glint. Not a full lost-sheep spawn: you still see them. Bringing them back is the “gone astray” feeling without another map hunt.
+4. **Table crumbs** — A picnic cloth / fallen basket (Psalm 23:5 foreshadow). Optional: share with the flock (they eat) vs walk past. Never required.
+5. **Anointing oil** — A clay jar. Pour on a nervous sheep (Milo) to calm them. One-shot care verb besides pet/bandage.
+6. **Other shepherds’ fold, empty** — A broken pen you cannot use. Teaches the real fold is the one you walk to at night. John 10 setup without spoiling the gate.
+7. **Counting** — Tap the shepherd to “count” the flock. If someone is missing, the count fails and the hint arrow wakes up. Cozy, not a minigame score.
+8. **Thorn lesson (now in)** — Brambles already snare. Lean into it: first snare teaches the bandage button if the hole hasn’t happened yet.
+
+## Second morning (after “we will all be changed”)
+
+The white robe is a resurrection wink; a second day can carry Psalm 23:5–6 without a boss.
+
+9. **You prepare a table** — Dawn cloth and bowl at the fold. Sit. Flock gathers. No fetch quest.
+10. **In the presence of my enemies** — Wolf visible at the horizon but does not enter the firelight. Howl once, then silence. Staff in hand is enough.
+11. **My cup overflows** — Quiet water appears nearer the fold. Drink is thanksgiving, not a need bar.
+12. **Goodness and mercy follow** — Two pale follower-shapes (not extra named sheep) trail you for a minute, then fade. The flock is complete; mercy is the afterimage.
+13. **I will dwell** — End beat: walk a short loop around the pen. The gate stays open. Credits / rest, not a new map.
+
+## What not to add
+
+- Combat, hunting the wolf, or a health bar.
+- Trivia, verse memorization drills, or locked gates that need a “correct” answer.
+- A second lost-sheep hunt that repeats day one.
+- Monetization, accounts, or a journal that feels like homework.

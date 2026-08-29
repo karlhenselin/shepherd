@@ -1,4 +1,4 @@
-1 _
+1 X
 Once you find the pen, it is sort of like a movie more than the interactive story that the rest of the game is.
 keep slowly reading the rest of psalm 23 between the sheep entering the fold and laying down as the gate.
 **You prepare a table** — picnic cloth and bowl appear. Player sits and eats.
@@ -7,7 +7,7 @@ keep slowly reading the rest of psalm 23 between the sheep entering the fold and
  stand up, table cloth fades out.
  time to lay down as the gate.
 
-2 _
+2 X
 Add a few other watering holes into the map. Make the thirsty point to the nearest.
 If you walk near one, sheep stop and drink.
 Recite different Bible passage about drinking / water
@@ -37,7 +37,7 @@ Recite different Bible passage about drinking / water
 Add another section in the treasure chest for these Water/thirst verses.
 Add an acheivement for getting all of them.
 
-3_ 
+3 X 
 Add a tree sprite with shade around it. Make it large.
 put several around the map.
 If the player walks near, he sits in the shade for a moment (not at night)

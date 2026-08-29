@@ -1,0 +1,35 @@
+# What could make the game more fun
+
+Keep the cozy Psalm 23 loop. Fun here is attachment, texture, and little surprises — not more systems.
+
+## Flock feelings
+
+- **Distinct gaits** — Clover glides, Biscuit waddles, Snowball darts, Milo startles. Readable at a glance.
+- **Look-back** — A follower turns their head toward you when you stop. Tiny, huge.
+- **Name on pet** — You already say their name; vary the lines by personality (Milo: “You’re safe.” Snowball: “Stay close this time.”).
+- **Wool fluff** — Pet sheds a couple of floating specks. Cheap delight.
+- **Jealous bleat** — Pet one and a nearby sheep baahs once. Comedy, not a mechanic.
+
+## World toy
+
+- **Fire idle** — Sit near the campfire and the shepherd warms their hands. No menu.
+- **Water rings** — Stepping the shore makes a one-frame ripple.
+- **Birds at dawn** — After the white robe, a short chorus then the wonders track. Marks the new day.
+- **Staff tap** — With the crook equipped, a second tap on empty ground clicks the staff (soft wood tick). Sheep glance. Not a weapon.
+- **Gem chime** — High, short ding on pickup (in the todo). Make it feel like a find, not an RPG loot sting.
+
+## Pacing
+
+- **Stop the pet pile-on after sleep** — Already started (wake south + move-to-unlock). Do the same after bandage and after loading.
+- **One thing at a time** — Never two hint arrows. If thorns and hunger overlap, thorns win until freed.
+- **Night is a mood, not a maze** — Wolf at the edge of the camera is enough scare. Don’t add fog that hides the path.
+
+## Moments people will tell someone about
+
+- Finding Clover and the first “The LORD is my shepherd.”
+- Bandaging the hole sheep while the others sit aside.
+- The howl, the staff, walking anyway.
+- Lying down in the gate.
+- Waking in white with the flock outside the pen.
+
+Double down on those. New content should set up or echo them, not compete.

@@ -19,7 +19,8 @@
     "dev-nolog": "vite --config vite/config.dev.mjs",
     "build-nolog": "vite build --config vite/config.prod.mjs",
     "cap:sync": "npm run build-nolog && npx cap sync android",
-    "android": "npx cap open android"
+    "android": "npx cap open android",
+    "voice": "npx --yes tsx scripts/generate-voice.ts"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.0",

@@ -1,4 +1,6 @@
 import { BIBLE_GEMS } from '../data/scripture';
+import { TREE_VERSES } from '../data/treeVerses';
+import { WATER_VERSES } from '../data/waterVerses';
 import type { GameSave } from '../save/gameSave';
 
 /** Logical achievement ids (not Play Console ids). */
@@ -12,11 +14,14 @@ export const ACHIEVEMENT_IDS = [
     'valley_of_shadow',
     'fear_no_evil',
     'comfort_of_staff',
+    'prepared_table',
     'the_gate',
     'we_shall_be_changed',
     'first_bible_gem',
     'gem_collector',
-    'bible_treasure_hunter'
+    'bible_treasure_hunter',
+    'living_water',
+    'under_the_shade'
 ] as const;
 
 export type AchievementId = typeof ACHIEVEMENT_IDS[number];
@@ -74,6 +79,11 @@ export const ACHIEVEMENTS: AchievementDef[] = [
         earned: (save) => save.hasStaff === true || save.checkpoint === 'found-staff' || save.heardPsalm4c === true
     },
     {
+        id: 'prepared_table',
+        title: 'You Prepare a Table',
+        earned: (save) => save.heardPsalm5 === true
+    },
+    {
         id: 'the_gate',
         title: 'The Gate',
         earned: (save) => save.heardJohn109 === true
@@ -97,6 +107,16 @@ export const ACHIEVEMENTS: AchievementDef[] = [
         id: 'bible_treasure_hunter',
         title: 'Bible Treasure Hunter',
         earned: (save) => (save.foundGems?.length ?? 0) >= BIBLE_GEMS.length
+    },
+    {
+        id: 'living_water',
+        title: 'Living Water',
+        earned: (save) => (save.foundWaterVerses?.length ?? 0) >= WATER_VERSES.length
+    },
+    {
+        id: 'under_the_shade',
+        title: 'Under the Shade',
+        earned: (save) => (save.foundTreeVerses?.length ?? 0) >= TREE_VERSES.length
     }
 ];
 
@@ -114,11 +134,14 @@ export const ANDROID_ACHIEVEMENT_IDS: Record<AchievementId, string> = {
     valley_of_shadow: '',
     fear_no_evil: '',
     comfort_of_staff: '',
+    prepared_table: '',
     the_gate: '',
     we_shall_be_changed: '',
     first_bible_gem: '',
     gem_collector: '',
-    bible_treasure_hunter: ''
+    bible_treasure_hunter: '',
+    living_water: '',
+    under_the_shade: ''
 };
 
 export function earnedAchievements (save: GameSave): AchievementId[] {
