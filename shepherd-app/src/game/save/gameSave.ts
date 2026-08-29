@@ -12,6 +12,7 @@ export type GameSave = {
     waitingName: string | null;
     nextNames: string[];
     heardPsalm1: boolean;
+    heardPsalm1b?: boolean;
     heardPsalm2: boolean;
     heardPsalm2b?: boolean;
     heardPsalm3: boolean;

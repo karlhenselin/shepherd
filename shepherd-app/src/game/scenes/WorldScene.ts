@@ -68,6 +68,8 @@ const HOLE_ENTER_NUDGE = 16;
 /** Pause stray teleport / lag warning and walk-into petting while shepherd is this close to the hole. */
 const HOLE_PROXIMITY_PAUSE = 200;
 const WALK_A_BIT = 420;
+/** Walk this far after the hungry cue before speaking Psalm 23:1b. */
+const HUNGER_WALK_PX = 500;
 /** After the flock is settled in the pen, wait this long before lying down. */
 const PEN_SLEEP_DELAY_MS = 1000;
 /** After Psalm 23:5, stand and walk to the gate before lying down. */
@@ -153,6 +155,7 @@ export class WorldScene extends Scene {
     private nextNames = FLOCK_NAMES.slice(1);
     private foundCount = 0;
     private heardPsalm1 = false;
+    private heardPsalm1b = false;
     private heardPsalm2 = false;
     private heardPsalm2b = false;
     private heardPsalm3 = false;
@@ -172,6 +175,8 @@ export class WorldScene extends Scene {
     private nightFadeInMs = 0;
     private sleepVeil!: GameObjects.Rectangle;
     private walkFrom: { x: number; y: number } | null = null;
+    /** After the hungry cue, walk this far before Psalm 23:1b. */
+    private hungerWalkFrom: { x: number; y: number } | null = null;
     /** After finding Milo, walk a bit before Biscuit appears in the hole. */
     private holeWalkFrom: { x: number; y: number } | null = null;
     /** Walk-into petting allowed once `time.now` reaches this (set on create). */
@@ -395,6 +400,7 @@ export class WorldScene extends Scene {
         this.updateBandageButton();
         this.tickPetting();
         this.maybeSpeakRighteousness();
+        this.maybeSpeakShallNotWant();
         this.maybeSpawnHoleSheep();
         this.maybeHowl();
         this.maybePickupStaff();
@@ -626,6 +632,10 @@ export class WorldScene extends Scene {
         const [line, ...rest] = lines;
         this.showCue(line, false);
 
+        if (line.includes('Psalm 23:1b')) {
+            this.heardPsalm1b = true;
+        }
+
         const checkpoint = checkpointForLine(line);
 
         if (checkpoint) {
@@ -638,10 +648,12 @@ export class WorldScene extends Scene {
 
     private beginHunger (sheep: Sheep): void {
         sheep.hungry = true;
-        this.playLines([
-            `${sheep.name} is hungry.`,
-            psalm23Half(1, 'b')
-        ]);
+        this.playLines([`${sheep.name} is hungry.`], () => {
+            this.hungerWalkFrom = {
+                x: this.shepherd.sprite.x,
+                y: this.shepherd.sprite.y
+            };
+        });
     }
 
     private makeFlockThirsty (): void {
@@ -870,6 +882,7 @@ export class WorldScene extends Scene {
             waitingName: waiting?.name ?? null,
             nextNames: [...this.nextNames],
             heardPsalm1: this.heardPsalm1,
+            heardPsalm1b: this.heardPsalm1b,
             heardPsalm2: this.heardPsalm2,
             heardPsalm2b: this.heardPsalm2b,
             heardPsalm3: this.heardPsalm3,
@@ -904,6 +917,7 @@ export class WorldScene extends Scene {
         this.foundCount = save.foundCount;
         this.nextNames = [...save.nextNames];
         this.heardPsalm1 = save.heardPsalm1;
+        this.heardPsalm1b = save.heardPsalm1b === true;
         this.heardPsalm2 = save.heardPsalm2;
         this.heardPsalm2b = save.heardPsalm2b === true || save.heardPsalm3;
         this.heardPsalm3 = save.heardPsalm3;
@@ -957,6 +971,13 @@ export class WorldScene extends Scene {
         }
         else if (this.shouldAwaitHoleSheep(save)) {
             this.beginHoleWatch();
+        }
+
+        if (save.heardPsalm1 && !save.heardPsalm1b && !save.heardPsalm2) {
+            this.hungerWalkFrom = {
+                x: this.shepherd.sprite.x,
+                y: this.shepherd.sprite.y
+            };
         }
 
         if (this.heardPsalm4a && !this.heardCorinthians) {
@@ -1032,6 +1053,7 @@ export class WorldScene extends Scene {
         this.nextNames = FLOCK_NAMES.slice(1);
         this.foundCount = 0;
         this.heardPsalm1 = false;
+        this.heardPsalm1b = false;
         this.heardPsalm2 = false;
         this.heardPsalm2b = false;
         this.heardPsalm3 = false;
@@ -1060,6 +1082,7 @@ export class WorldScene extends Scene {
         this.foundGems = [];
         this.lastCheckpoint = null;
         this.walkFrom = null;
+        this.hungerWalkFrom = null;
         this.holeWalkFrom = null;
         this.strayReadyAt = 0;
         this.penSleepAt = 0;
@@ -1528,6 +1551,7 @@ export class WorldScene extends Scene {
             foundTreeVerses: [...this.foundTreeVerses],
             heard: {
                 heardPsalm1: this.heardPsalm1,
+                heardPsalm1b: this.heardPsalm1b,
                 heardPsalm2: this.heardPsalm2,
                 heardPsalm2b: this.heardPsalm2b,
                 heardPsalm3: this.heardPsalm3,
@@ -1581,6 +1605,24 @@ export class WorldScene extends Scene {
         this.holeWalkFrom = null;
         this.spawnNextSheep();
         this.showCue('A sheep is missing.');
+    }
+
+    private maybeSpeakShallNotWant (): void {
+        if (this.heardPsalm1b || !this.hungerWalkFrom || this.scriptPlaying) {
+            return;
+        }
+
+        const dist = Math.hypot(
+            this.shepherd.sprite.x - this.hungerWalkFrom.x,
+            this.shepherd.sprite.y - this.hungerWalkFrom.y
+        );
+
+        if (dist < HUNGER_WALK_PX) {
+            return;
+        }
+
+        this.hungerWalkFrom = null;
+        this.playLines([psalm23Half(1, 'b')]);
     }
 
     private maybeSpeakRighteousness (): void {
