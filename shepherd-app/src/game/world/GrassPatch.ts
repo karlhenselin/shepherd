@@ -6,11 +6,14 @@ const DISPLAY_SIZE = 56;
 export const GRASS_APPROACH_RANGE = 180;
 /** Stand this close to the plant before chewing. */
 export const GRASS_EAT_ARRIVE = 16;
+/** After the change, eaten tufts grow back this long after a nibble. */
+export const GRASS_GROW_BACK_MS = 15_000;
 
 export class GrassPatch {
     readonly sprite: GameObjects.Sprite;
     private claimed = false;
     eaten = false;
+    private eatenAt = 0;
 
     constructor (scene: Scene, x: number, y: number) {
         ensureGrassTexture(scene);
@@ -41,10 +44,24 @@ export class GrassPatch {
         this.claimed = true;
     }
 
-    markEaten (): void {
+    markEaten (now: number): void {
         this.claimed = true;
         this.eaten = true;
+        this.eatenAt = now;
         this.sprite.setTexture('grass-eaten');
+        this.sprite.setDisplaySize(DISPLAY_SIZE, DISPLAY_SIZE);
+    }
+
+    /** After 1 Corinthians 15:51, restore the tuft once the delay has passed. */
+    maybeGrowBack (now: number): void {
+        if (!this.eaten || now - this.eatenAt < GRASS_GROW_BACK_MS) {
+            return;
+        }
+
+        this.claimed = false;
+        this.eaten = false;
+        this.eatenAt = 0;
+        this.sprite.setTexture('grass-tuft');
         this.sprite.setDisplaySize(DISPLAY_SIZE, DISPLAY_SIZE);
     }
 }

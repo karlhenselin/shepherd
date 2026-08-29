@@ -25,7 +25,7 @@ import {
 import { TREE_VERSES, treeVerseLine } from '../data/treeVerses';
 import { WATER_VERSES, waterVerseLine } from '../data/waterVerses';
 
-const SHEEP_NAMES = ['Clover', 'Snowball', 'Milo', 'Biscuit', 'Wolf', 'Leo'] as const;
+const SHEEP_NAMES = ['Clover', 'Snowball', 'Milo', 'Biscuit', 'Sarah', 'Leo'] as const;
 
 const STATIC_LINES = [
     'In the beginning',
@@ -42,7 +42,6 @@ const STATIC_LINES = [
     'The flock is home.',
     'I need my staff.',
     'Guide the flock to the pen.',
-    'The flock is coming home.',
     'You reached the pen.',
     'Night is falling.',
     'You found a Bible gem.',
@@ -61,7 +60,24 @@ const STATIC_LINES = [
     'Easy, Biscuit.',
     'Gentle now, Biscuit.',
     'Tiny Biscuit.',
-    'I\'ll call you Leo.'
+    'I\'ll call you Leo.',
+    'I\'ll name you Sarah!',
+    'What a mane.',
+    'Good lion.',
+    'Easy, big guy.',
+    'Gentle now, king.',
+    'Such a good lion.',
+    'Hey, Leo.',
+    'Easy, Leo.',
+    'Come here, Leo.',
+    'Good girl.',
+    'Good wolf.',
+    'Not so scary now.',
+    'What a soft wolf.',
+    'Hey, Sarah.',
+    'Easy, Sarah.',
+    'Come here, Sarah.',
+    'Sweet Sarah.'
 ] as const;
 
 const NAMED_TEMPLATES: Array<(name: string) => string> = [

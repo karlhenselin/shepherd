@@ -5,6 +5,8 @@ import { WaterSource } from '../world/WaterSource';
 import { characterDepth } from '../world/constants';
 
 export const FOLLOW_SPEED = 150 * 0.95 * 0.95;
+/** After 1 Corinthians 15:51, the sheep keep up a little better. */
+const CHANGED_FOLLOW_SCALE = 1.18;
 const NOTICE_DISTANCE = 110;
 export const FOLLOW_DISTANCE = 64;
 const NIGHT_FOLLOW_DISTANCE = 41;
@@ -14,8 +16,8 @@ const DRINK_MS = 2600;
 const EAT_MS = 2600;
 const SNACK_COOLDOWN_MS = 9000;
 const SHEEP_SIZE = 48;
-/** Biscuit is the lamb — same slow follow, smaller sprite. */
-const BISCUIT_SIZE = 34;
+/** Biscuit is the lamb — smaller sprite; slower follow until the change. */
+const BISCUIT_SIZE = 34 * 0.95;
 const BEAST_SIZE = 48;
 const SHADOW_OFFSET = 18;
 const WADDLE_DEG = 7;
@@ -57,15 +59,16 @@ const SHEEP_TRAITS: Record<string, SheepTraits> = {
     Biscuit: { followSpeed: 0.78, trailScale: 1.05, strayWeight: 0.85, waddleDeg: 6.5, waddlePeriod: 128, waddlePhase: 4.1 },
     Milo: { followSpeed: 1.0608, trailScale: 0.62, strayWeight: 0.40, waddleDeg: 8, waddlePeriod: 70, waddlePhase: 5.2 },
     Wolf: { followSpeed: 1.36, trailScale: 0.72, strayWeight: 0, waddleDeg: 4, waddlePeriod: 86, waddlePhase: 1.1 },
+    Sarah: { followSpeed: 1.36, trailScale: 0.72, strayWeight: 0, waddleDeg: 4, waddlePeriod: 86, waddlePhase: 1.1 },
     Leo: { followSpeed: 1.36, trailScale: 0.72, strayWeight: 0, waddleDeg: 4.5, waddlePeriod: 94, waddlePhase: 3.3 }
 };
 
 export function isPeaceableFlockName (name: string): boolean {
-    return name === 'Wolf' || name === 'Leo' || name === 'Lion';
+    return name === 'Wolf' || name === 'Sarah' || name === 'Leo' || name === 'Lion';
 }
 
 function flockTextureKey (name: string): string {
-    if (name === 'Wolf') {
+    if (name === 'Wolf' || name === 'Sarah') {
         return 'wolf';
     }
 
@@ -87,6 +90,15 @@ function traitsFor (name: string): SheepTraits {
     };
 }
 
+/** Clover / Snowball / Milo — Biscuit matches this after the change. */
+function adultFollowSpeed (): number {
+    return (
+        SHEEP_TRAITS.Clover.followSpeed
+        + SHEEP_TRAITS.Snowball.followSpeed
+        + SHEEP_TRAITS.Milo.followSpeed
+    ) / 3;
+}
+
 export type SheepMood = 'waiting' | 'following' | 'drinking' | 'eating' | 'hurt' | 'penned';
 export type SheepEvent = 'found' | 'ate' | 'drank' | 'rejoined' | null;
 
@@ -100,6 +112,8 @@ export class Sheep {
     hungry = false;
     /** After the change: nibble nearby grass for fun, not as a hunger need. */
     snack = false;
+    /** After the change: follow a little faster so the flock keeps up. */
+    changed = false;
     hurt = false;
     /** Stuck in a bramble (uses hurt/bandage flow, not the hole). */
     snaredInThorns = false;
@@ -133,18 +147,18 @@ export class Sheep {
 
     constructor (scene: Scene, x: number, y: number, name: string, followSlot: number) {
         this.scene = scene;
-        this.name = name === 'Lion' ? 'Leo' : name;
+        this.name = name === 'Lion' ? 'Leo' : name === 'Wolf' ? 'Sarah' : name;
         this.followSlot = followSlot;
         this.peaceable = isPeaceableFlockName(this.name);
         ensureSheepTexture(scene);
         ensureSheepShadow(scene);
 
         const lamb = this.name === 'Biscuit';
-        this.shadowOffset = lamb ? 13 : SHADOW_OFFSET;
+        this.shadowOffset = lamb ? 13 * 0.95 : SHADOW_OFFSET;
         this.shadow = scene.add.image(x, y + this.shadowOffset, 'sheep-shadow');
 
         if (lamb) {
-            this.shadow.setDisplaySize(28, 11);
+            this.shadow.setDisplaySize(28 * 0.95, 11 * 0.95);
         }
 
         const texture = flockTextureKey(this.name);
@@ -163,7 +177,7 @@ export class Sheep {
 
         this.body = this.sprite.body as Physics.Arcade.Body;
         this.body.setCollideWorldBounds(true);
-        const bodyRadius = lamb ? 10 : Math.round(14 * this.sprite.width / SHEEP_SIZE);
+        const bodyRadius = lamb ? Math.round(10 * 0.95) : Math.round(14 * this.sprite.width / SHEEP_SIZE);
         this.body.setCircle(bodyRadius);
         this.body.setVelocity(0, 0);
         this.body.setImmovable(true);
@@ -463,7 +477,7 @@ export class Sheep {
                 this.mood = 'following';
                 this.hungry = false;
                 this.nextSnackAt = now + SNACK_COOLDOWN_MS;
-                this.eatPatch?.markEaten();
+                this.eatPatch?.markEaten(now);
                 this.eatPatch = null;
             }
 
@@ -557,7 +571,7 @@ export class Sheep {
         const followDist = Math.hypot(targetX - this.sprite.x, targetY - this.sprite.y);
 
         if (followDist > 18) {
-            this.moveToward(targetX, targetY, FOLLOW_SPEED * traitsFor(this.name).followSpeed);
+            this.moveToward(targetX, targetY, this.trailSpeed());
             this.sprite.setAngle(this.waddleAngle(now));
         }
         else {
@@ -762,6 +776,19 @@ export class Sheep {
         };
     }
 
+    private followSpeedScale (): number {
+        if (this.changed && this.name === 'Biscuit') {
+            return adultFollowSpeed();
+        }
+
+        return traitsFor(this.name).followSpeed;
+    }
+
+    private trailSpeed (): number {
+        const boost = this.changed && !this.peaceable ? CHANGED_FOLLOW_SCALE : 1;
+        return FOLLOW_SPEED * this.followSpeedScale() * boost;
+    }
+
     private waddleAngle (now: number): number {
         const traits = traitsFor(this.name);
         return Math.sin(now / traits.waddlePeriod + traits.waddlePhase) * traits.waddleDeg;
@@ -804,7 +831,7 @@ export class Sheep {
         this.eatPatch = patch;
 
         if (dist > GRASS_EAT_ARRIVE) {
-            this.moveToward(patch.x, patch.y, FOLLOW_SPEED * traitsFor(this.name).followSpeed);
+            this.moveToward(patch.x, patch.y, FOLLOW_SPEED * this.followSpeedScale());
             this.sprite.setAngle(this.waddleAngle(now));
             this.faceVelocity();
             this.placeShadow();

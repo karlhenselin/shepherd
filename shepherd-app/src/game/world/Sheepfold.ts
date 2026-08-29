@@ -158,6 +158,11 @@ export class Sheepfold {
         };
     }
 
+    /** Lane south of the fence rails so a runner goes around the pen, not through it. */
+    southLaneY (): number {
+        return this.y + 168;
+    }
+
     fireKeepOut (): { x: number; y: number; radius: number } {
         const fire = this.fireSpot();
         return {

@@ -240,14 +240,14 @@ function corinthians (): GameSave {
 function findLion (): GameSave {
     return afterChange('found-sheep', {
         waitingName: 'Leo',
-        nextNames: ['Wolf']
+        nextNames: ['Sarah']
     });
 }
 
 function findWolf (): GameSave {
     return afterChange('found-sheep', {
         foundNames: [...FLOCK, 'Leo'],
-        waitingName: 'Wolf',
+        waitingName: 'Sarah',
         nextNames: []
     });
 }
@@ -257,7 +257,7 @@ function enterCity (): GameSave {
 
     return afterChange('enter-city', {
         foundCount: 6,
-        foundNames: [...FLOCK, 'Leo', 'Wolf'],
+        foundNames: [...FLOCK, 'Leo', 'Sarah'],
         waitingName: null,
         nextNames: [],
         player: { x: city.x, y: city.y + CITY_APPROACH_Y }

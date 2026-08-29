@@ -134,11 +134,11 @@ export const ISAIAH_11_6 = {
     text: 'The wolf will live with the lamb, and the leopard will lie down with the goat; the calf and young lion and fattened ox will be together, and a little child will lead them.',
     wolf: {
         ref: 'Isaiah 11:6',
-        text: 'The calf and the young lion will lie down together, and a little child will lead them.'
+        text: 'The wolf will live with the lamb.'
     },
     lion: {
         ref: 'Isaiah 11:6',
-        text: 'The wolf will live with the lamb.'
+        text: 'The calf and the young lion will lie down together, and a little child will lead them.'
     }
 } as const;
 
@@ -175,7 +175,7 @@ export const BIBLE_GEMS = [
     { id: 'romans-3-23', ref: 'Romans 3:23', text: 'For all have sinned and fall short of the glory of God.' },
     { id: 'romans-6-23', ref: 'Romans 6:23', text: 'For the wages of sin is death, but the gift of God is eternal life…' },
     { id: 'romans-10-9', ref: 'Romans 10:9', text: 'If you confess with your mouth, "Jesus is Lord," and believe in your heart that God raised Him from the dead, you will be saved.' },
-    { id: 'acts-4-12', ref: 'Acts 4:12', text: 'There is salvation in no one else…' },
+    { id: 'acts-4-12', ref: 'Acts 4:12', text: 'There is salvation in no one else, for there is no other name under heaven given to men by which we must be saved.' },
     { id: 'john-14-6', ref: 'John 14:6', text: 'I am the way, and the truth, and the life…' },
     { id: '2-corinthians-5-17', ref: '2 Corinthians 5:17', text: 'If anyone is in Christ, he is a new creation…' },
     { id: '1-john-4-8', ref: '1 John 4:8', text: 'God is love.' },
@@ -335,7 +335,7 @@ export function unlockedStoryPassages (flags: StoryPassageFlags): { ref: string;
         unlocked.push(ISAIAH_26_2, REVELATION_21_2);
     }
 
-    if (flags.foundNames?.some((name) => name === 'Wolf' || name === 'Leo' || name === 'Lion')) {
+    if (flags.foundNames?.some((name) => name === 'Wolf' || name === 'Sarah' || name === 'Leo' || name === 'Lion')) {
         unlocked.push(ISAIAH_11_6);
     }
 

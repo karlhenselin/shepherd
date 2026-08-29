@@ -42,7 +42,7 @@ import { applyAchievements, syncAchievements } from '../achievements/achievement
 import { GameSave, StoryCheckpoint, loadSave, writeSave } from '../save/gameSave';
 
 const FLOCK_NAMES = ['Clover', 'Snowball', 'Milo', 'Biscuit'];
-const PEACEABLE_JOINERS = ['Leo', 'Wolf'] as const;
+const PEACEABLE_JOINERS = ['Leo', 'Sarah'] as const;
 const SHEPHERD_SPEED = 180;
 const STRAY_AHEAD_DISTANCE = FOLLOW_DISTANCE + (SHEPHERD_SPEED - FOLLOW_SPEED) * 7;
 /** Once lagging sheep crosses this fraction of stray distance, fire one warning baah. */
@@ -127,6 +127,50 @@ const BABY_PET_LINES: Array<(name: string) => string> = [
     () => 'What a little lamb.',
     () => 'Come here, little one.'
 ];
+
+/** Leo — big cat, still a pet. */
+const LION_PET_LINES: Array<(name: string) => string> = [
+    (name) => `Hey, ${name}.`,
+    (name) => `Easy, ${name}.`,
+    (name) => `Love you, ${name}.`,
+    (name) => `There you are, ${name}.`,
+    (name) => `Come here, ${name}.`,
+    () => 'What a mane.',
+    () => 'Good lion.',
+    () => 'Easy, big guy.',
+    () => 'Gentle now, king.',
+    () => 'Such a good lion.'
+];
+
+/** Sarah — once a hunter, now one of the flock. */
+const WOLF_PET_LINES: Array<(name: string) => string> = [
+    (name) => `Hey, ${name}.`,
+    (name) => `Easy, ${name}.`,
+    (name) => `Love you, ${name}.`,
+    (name) => `There you are, ${name}.`,
+    (name) => `Come here, ${name}.`,
+    (name) => `Sweet ${name}.`,
+    () => 'Good girl.',
+    () => 'Good wolf.',
+    () => 'Not so scary now.',
+    () => 'What a soft wolf.'
+];
+
+function petLinesFor (name: string): Array<(name: string) => string> {
+    if (name === 'Biscuit') {
+        return BABY_PET_LINES;
+    }
+
+    if (name === 'Leo') {
+        return LION_PET_LINES;
+    }
+
+    if (name === 'Sarah') {
+        return WOLF_PET_LINES;
+    }
+
+    return PET_LINES;
+}
 
 export class WorldScene extends Scene {
     private shepherd!: Shepherd;
@@ -415,6 +459,14 @@ export class WorldScene extends Scene {
             }
         }
 
+        if (this.heardCorinthians) {
+            const now = this.time.now;
+
+            for (const patch of this.grass) {
+                patch.maybeGrowBack(now);
+            }
+        }
+
         this.maybeStrayFlock();
 
         if (!this.scriptPlaying) {
@@ -524,7 +576,7 @@ export class WorldScene extends Scene {
 
         // Walk-into pets only: skip while playLines/scripture is speaking (find cue is enough).
         if (!this.scriptPlaying) {
-            const lines = sheep.name === 'Biscuit' ? BABY_PET_LINES : PET_LINES;
+            const lines = petLinesFor(sheep.name);
             const line = lines[Math.floor(Math.random() * lines.length)](sheep.name);
             speakCue(line);
         }
@@ -597,7 +649,11 @@ export class WorldScene extends Scene {
         this.celebrateFinding(sheep);
         sheep.snack = true;
 
-        const foundLine = sheep.name === 'Leo' ? 'I\'ll call you Leo.' : `${sheep.name}! I found you!`;
+        const foundLine = sheep.name === 'Leo'
+            ? 'I\'ll call you Leo.'
+            : sheep.name === 'Sarah'
+                ? 'I\'ll name you Sarah!'
+                : `${sheep.name}! I found you!`;
         const verse = sheep.name === 'Leo' ? isaiah11LionLine() : isaiah11WolfLine();
         this.playLines([
             foundLine,
@@ -805,10 +861,6 @@ export class WorldScene extends Scene {
         if (this.nightStarted) {
             if (!this.heardJohn102) {
                 return 'Guide the flock to the pen.';
-            }
-
-            if (!this.heardJohn109 && this.flock.some((sheep) => !sheep.isSettledInPen)) {
-                return 'The flock is coming home.';
             }
 
             return 'You reached the pen.';
@@ -1058,6 +1110,7 @@ export class WorldScene extends Scene {
             sheep.deferWalkIntoPetting(PETTING_SUPPRESS_MS);
             sheep.hungry = !this.heardCorinthians && save.heardPsalm1 && !save.heardPsalm2;
             sheep.snack = this.heardCorinthians;
+            sheep.changed = this.heardCorinthians;
             sheep.thirsty = save.foundCount >= 2 && !this.heardPsalm2b;
             this.flock.push(sheep);
         });
@@ -1814,7 +1867,7 @@ export class WorldScene extends Scene {
         return this.city;
     }
 
-    /** After the change, once Leo and Wolf have joined: walk to New Jerusalem. */
+    /** After the change, once Leo and Sarah have joined: walk to New Jerusalem. */
     private cityObjectiveOpen (): boolean {
         return this.heardCorinthians
             && !this.heardCity
@@ -1930,15 +1983,16 @@ export class WorldScene extends Scene {
             return;
         }
 
-        // Arrival: John 10:2, then John 14:6, then the flock files in.
+        // Arrival: John 10:2, then the flock files in during John 14:6.
         if (!this.heardJohn102) {
             if (this.scriptPlaying || !this.sheepfold.isNear(this.shepherd.sprite.x, this.shepherd.sprite.y)) {
                 return;
             }
 
             stopHowling();
-            this.playLines([john10Line(2), john14Line()], () => {
+            this.playLines([john10Line(2)], () => {
                 this.beginPenning();
+                this.playLines([john14Line()]);
             });
             return;
         }
@@ -2126,21 +2180,15 @@ export class WorldScene extends Scene {
         });
     }
 
-    /** Lion from off-screen west; wolves hold until it closes, then bolt right. */
+    /** Lion from off-screen west, south of the pen; wolves hold until it closes, then bolt right. */
     private beginLionChase (): void {
         this.gatherWolvesForChase();
         this.wolvesFlushed = this.tableWolves.length === 0;
         this.lionChaseDone = false;
 
         const view = this.cameras.main.worldView;
-        const pack = this.tableWolves;
-        let chaseY = this.fold().fireSpot().y - 36;
-
-        if (pack.length > 0) {
-            chaseY = pack.reduce((sum, wolf) => sum + wolf.sprite.y, 0) / pack.length;
-        }
-
-        const spawnX = view.left - 96;
+        const chaseY = this.fold().southLaneY();
+        const spawnX = view.left - 36;
         const exitX = Math.max(view.right + 320, spawnX + 1600);
         this.chaseLion = new Lion(this, spawnX, chaseY);
         this.chaseLion.walkTo(exitX, chaseY, LION_CHARGE_SPEED);
@@ -2539,6 +2587,7 @@ export class WorldScene extends Scene {
         for (const sheep of this.flock) {
             sheep.hungry = false;
             sheep.snack = true;
+            sheep.changed = true;
         }
     }
 
@@ -2667,6 +2716,17 @@ export class WorldScene extends Scene {
         }
 
         this.wolf = new Wolf(this, this.shepherd.sprite.x, this.shepherd.sprite.y);
+
+        if (this.sheepfold?.isNear(this.shepherd.sprite.x, this.shepherd.sprite.y)) {
+            const fire = this.sheepfold.fireSpot();
+            const x = fire.x + 300;
+            const y = fire.y + 36;
+            this.wolf.placeAt(x, y);
+            this.wolf.setOrigin(x, y);
+            this.wolf.hold();
+            return;
+        }
+
         this.wolf.setAggressive(true);
     }
 
@@ -2746,11 +2806,14 @@ export class WorldScene extends Scene {
             this.hole = new Hole(this, spawn.x, spawn.y);
             const trapped = new Sheep(this, spawn.x, spawn.y + 10, name, slot);
             trapped.trapInHole();
+            trapped.changed = this.heardCorinthians;
             this.flock.push(trapped);
             return;
         }
 
-        this.flock.push(new Sheep(this, spawn.x, spawn.y, name, slot));
+        const sheep = new Sheep(this, spawn.x, spawn.y, name, slot);
+        sheep.changed = this.heardCorinthians;
+        this.flock.push(sheep);
     }
 
     private maybeStrayFlock (): void {
