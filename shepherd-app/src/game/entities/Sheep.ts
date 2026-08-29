@@ -12,7 +12,11 @@ const NIGHT_FOLLOW_DISTANCE = 41;
 const FOLLOW_LATERAL = 28;
 const DRINK_MS = 2600;
 const EAT_MS = 2600;
+const SNACK_COOLDOWN_MS = 9000;
 const SHEEP_SIZE = 48;
+/** Biscuit is the lamb — same slow follow, smaller sprite. */
+const BISCUIT_SIZE = 34;
+const BEAST_SIZE = 48;
 const SHADOW_OFFSET = 18;
 const WADDLE_DEG = 7;
 const PET_DISTANCE = 50;
@@ -51,8 +55,26 @@ const SHEEP_TRAITS: Record<string, SheepTraits> = {
     Clover: { followSpeed: 1.06, trailScale: 0.82, strayWeight: 0.45, waddleDeg: 5, waddlePeriod: 78, waddlePhase: 0.6 },
     Snowball: { followSpeed: 1.02, trailScale: 1.28, strayWeight: 1.85, waddleDeg: 10, waddlePeriod: 112, waddlePhase: 2.4 },
     Biscuit: { followSpeed: 0.78, trailScale: 1.05, strayWeight: 0.85, waddleDeg: 6.5, waddlePeriod: 128, waddlePhase: 4.1 },
-    Milo: { followSpeed: 1.0608, trailScale: 0.62, strayWeight: 0.40, waddleDeg: 8, waddlePeriod: 70, waddlePhase: 5.2 }
+    Milo: { followSpeed: 1.0608, trailScale: 0.62, strayWeight: 0.40, waddleDeg: 8, waddlePeriod: 70, waddlePhase: 5.2 },
+    Wolf: { followSpeed: 1.36, trailScale: 0.72, strayWeight: 0, waddleDeg: 4, waddlePeriod: 86, waddlePhase: 1.1 },
+    Leo: { followSpeed: 1.36, trailScale: 0.72, strayWeight: 0, waddleDeg: 4.5, waddlePeriod: 94, waddlePhase: 3.3 }
 };
+
+export function isPeaceableFlockName (name: string): boolean {
+    return name === 'Wolf' || name === 'Leo' || name === 'Lion';
+}
+
+function flockTextureKey (name: string): string {
+    if (name === 'Wolf') {
+        return 'wolf';
+    }
+
+    if (name === 'Leo' || name === 'Lion') {
+        return 'lion';
+    }
+
+    return 'sheep';
+}
 
 function traitsFor (name: string): SheepTraits {
     return SHEEP_TRAITS[name] ?? {
@@ -76,9 +98,13 @@ export class Sheep {
     readonly sprite: GameObjects.Sprite;
     thirsty = false;
     hungry = false;
+    /** After the change: nibble nearby grass for fun, not as a hunger need. */
+    snack = false;
     hurt = false;
     /** Stuck in a bramble (uses hurt/bandage flow, not the hole). */
     snaredInThorns = false;
+    /** Night wolf got them — bandage to free them. */
+    hurtByWolf = false;
     discovered = false;
     mood: SheepMood = 'waiting';
     private readonly body: Physics.Arcade.Body;
@@ -87,6 +113,7 @@ export class Sheep {
     private readonly shadow: GameObjects.Image;
     private drinkUntil = 0;
     private eatUntil = 0;
+    private nextSnackAt = 0;
     private danceUntil = 0;
     private nextPetAt = 0;
     private danceHomeX = 0;
@@ -100,24 +127,44 @@ export class Sheep {
     private rescueWait: { x: number; y: number } | null = null;
     /** Tuft this sheep is walking toward or chewing. */
     private eatPatch: GrassPatch | null = null;
+    /** Wolf or lion that joined the flock after 1 Corinthians 15:51. */
+    readonly peaceable: boolean;
+    private readonly shadowOffset: number;
 
     constructor (scene: Scene, x: number, y: number, name: string, followSlot: number) {
         this.scene = scene;
-        this.name = name;
+        this.name = name === 'Lion' ? 'Leo' : name;
         this.followSlot = followSlot;
+        this.peaceable = isPeaceableFlockName(this.name);
         ensureSheepTexture(scene);
         ensureSheepShadow(scene);
 
-        this.shadow = scene.add.image(x, y + SHADOW_OFFSET, 'sheep-shadow');
+        const lamb = this.name === 'Biscuit';
+        this.shadowOffset = lamb ? 13 : SHADOW_OFFSET;
+        this.shadow = scene.add.image(x, y + this.shadowOffset, 'sheep-shadow');
 
-        this.sprite = scene.physics.add.sprite(x, y, 'sheep');
-        this.sprite.setDisplaySize(SHEEP_SIZE, SHEEP_SIZE);
-        this.sprite.setTint(SHEEP_TINT[name] ?? 0xffffff);
+        if (lamb) {
+            this.shadow.setDisplaySize(28, 11);
+        }
+
+        const texture = flockTextureKey(this.name);
+        this.sprite = scene.physics.add.sprite(x, y, texture);
+
+        if (this.peaceable) {
+            fitBeastSprite(this.sprite);
+        }
+        else {
+            const size = lamb ? BISCUIT_SIZE : SHEEP_SIZE;
+            this.sprite.setDisplaySize(size, size);
+            this.sprite.setTint(SHEEP_TINT[name] ?? 0xffffff);
+        }
+
         this.placeShadow();
 
         this.body = this.sprite.body as Physics.Arcade.Body;
         this.body.setCollideWorldBounds(true);
-        this.body.setCircle(Math.round(14 * this.sprite.width / SHEEP_SIZE));
+        const bodyRadius = lamb ? 10 : Math.round(14 * this.sprite.width / SHEEP_SIZE);
+        this.body.setCircle(bodyRadius);
         this.body.setVelocity(0, 0);
         this.body.setImmovable(true);
     }
@@ -208,6 +255,7 @@ export class Sheep {
         this.rescueWait = null;
         this.hurt = true;
         this.snaredInThorns = false;
+        this.hurtByWolf = false;
         this.mood = 'hurt';
         this.sprite.setAngle(32);
         this.sprite.setTint(0xe8a898);
@@ -222,6 +270,7 @@ export class Sheep {
         this.rescueWait = null;
         this.hurt = true;
         this.snaredInThorns = true;
+        this.hurtByWolf = false;
         this.discovered = true;
         this.mood = 'hurt';
         this.sprite.setAngle(18);
@@ -231,11 +280,30 @@ export class Sheep {
         this.placeShadow();
     }
 
+    /** Night wolf touched this following sheep — stop and wait for a bandage. */
+    struckByWolf (): void {
+        this.clearHappyDance();
+        this.rescueWait = null;
+        this.penTarget = null;
+        this.penPath = [];
+        this.hurt = true;
+        this.hurtByWolf = true;
+        this.snaredInThorns = false;
+        this.discovered = true;
+        this.mood = 'hurt';
+        this.sprite.setAngle(10);
+        this.sprite.setTint(0xd8c0b0);
+        this.body.setImmovable(true);
+        this.body.setVelocity(0, 0);
+        this.placeShadow();
+    }
+
     heal (): void {
         this.hurt = false;
         this.snaredInThorns = false;
+        this.hurtByWolf = false;
         this.sprite.setAngle(0);
-        this.sprite.setTint(SHEEP_TINT[this.name] ?? 0xffffff);
+        this.applyFlockTint();
         this.shadow.setAlpha(1);
         this.rescueWait = null;
         this.beginFollowing();
@@ -275,6 +343,15 @@ export class Sheep {
 
     markDiscovered (): void {
         this.discovered = true;
+    }
+
+    private applyFlockTint (): void {
+        if (this.peaceable) {
+            this.sprite.clearTint();
+            return;
+        }
+
+        this.sprite.setTint(SHEEP_TINT[this.name] ?? 0xffffff);
     }
 
     /** Snowball strays; Clover and Milo cling. Used when picking who falls behind. */
@@ -385,6 +462,7 @@ export class Sheep {
                 this.sprite.setAngle(0);
                 this.mood = 'following';
                 this.hungry = false;
+                this.nextSnackAt = now + SNACK_COOLDOWN_MS;
                 this.eatPatch?.markEaten();
                 this.eatPatch = null;
             }
@@ -446,7 +524,7 @@ export class Sheep {
             return null;
         }
 
-        if (this.hungry) {
+        if (this.hungry || this.snack) {
             const hunger = this.tickHunger(grass, now);
 
             if (hunger === 'ate') {
@@ -699,12 +777,16 @@ export class Sheep {
         const depth = characterDepth(this.sprite.y);
         this.sprite.setDepth(depth);
         this.shadow.setDepth(depth - 0.01);
-        this.shadow.setPosition(this.sprite.x, this.sprite.y + SHADOW_OFFSET);
+        this.shadow.setPosition(this.sprite.x, this.sprite.y + this.shadowOffset);
         this.shadow.setFlipX(this.sprite.flipX);
     }
 
     /** Walk up to an uneaten tuft, then chew. */
     private tickHunger (grass: GrassPatch[], now: number): 'ate' | 'walking' | null {
+        if (this.snack && !this.hungry && now < this.nextSnackAt) {
+            return null;
+        }
+
         const patch = this.pickEatPatch(grass);
 
         if (!patch) {
@@ -844,6 +926,15 @@ function trailLateralOffset (slot: number): number {
 
     const pair = Math.ceil(slot / 2);
     return (slot % 2 === 1 ? 1 : -1) * pair * FOLLOW_LATERAL;
+}
+
+/** Trimmed wolf/lion textures keep aspect; origin sits the paws on the shadow. */
+function fitBeastSprite (sprite: GameObjects.Sprite): void {
+    const src = sprite.texture.getSourceImage() as { width: number; height: number };
+    const height = BEAST_SIZE;
+    const width = height * (src.width / Math.max(src.height, 1));
+    sprite.setDisplaySize(width, height);
+    sprite.setOrigin(0.5, 0.72);
 }
 
 function ensureSheepTexture (scene: Scene): void {

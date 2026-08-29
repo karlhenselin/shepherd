@@ -1,24 +1,31 @@
 import {
     BIBLE_GEMS,
     CORINTHIANS_15_51,
+    ISAIAH_11_6,
+    ISAIAH_26_2,
     ISAIAH_53_6,
     JOHN_10,
     JOHN_14_6,
     PSALM_23,
+    REVELATION_21_2,
     bibleGemLine,
     corinthians15Line,
+    isaiah11LionLine,
+    isaiah11WolfLine,
+    isaiah26Line,
     isaiah53Line,
     john10Line,
     john14Line,
     psalm23Comfort,
     psalm23FiveTable,
     psalm23Half,
+    revelation21CityLine,
     scriptureLine
 } from '../data/scripture';
 import { TREE_VERSES, treeVerseLine } from '../data/treeVerses';
 import { WATER_VERSES, waterVerseLine } from '../data/waterVerses';
 
-const SHEEP_NAMES = ['Clover', 'Snowball', 'Milo', 'Biscuit'] as const;
+const SHEEP_NAMES = ['Clover', 'Snowball', 'Milo', 'Biscuit', 'Wolf', 'Leo'] as const;
 
 const STATIC_LINES = [
     'In the beginning',
@@ -30,6 +37,8 @@ const STATIC_LINES = [
     'Get closer.',
     'The sheep are thirsty.',
     'The sheep are hungry.',
+    'Enlarge the flock.',
+    'Enter the city.',
     'The flock is home.',
     'I need my staff.',
     'Guide the flock to the pen.',
@@ -42,7 +51,17 @@ const STATIC_LINES = [
     'What a soft little sheep.',
     'Easy now.',
     'Sweet sheep.',
-    'Such a good sheep.'
+    'Such a good sheep.',
+    'Easy, little one.',
+    'There, little lamb.',
+    'Sweet baby.',
+    'Good little lamb.',
+    'What a little lamb.',
+    'Come here, little one.',
+    'Easy, Biscuit.',
+    'Gentle now, Biscuit.',
+    'Tiny Biscuit.',
+    'I\'ll call you Leo.'
 ] as const;
 
 const NAMED_TEMPLATES: Array<(name: string) => string> = [
@@ -86,6 +105,13 @@ export function allSpokenLines (): string[] {
     lines.add(psalm23Comfort());
     lines.add(psalm23FiveTable());
     lines.add(isaiah53Line());
+    lines.add(isaiah11WolfLine());
+    lines.add(isaiah11LionLine());
+    lines.add(isaiah26Line());
+    lines.add(revelation21CityLine());
+    lines.add(scriptureLine(ISAIAH_11_6));
+    lines.add(scriptureLine(ISAIAH_26_2));
+    lines.add(scriptureLine(REVELATION_21_2));
     lines.add(john10Line(2));
     lines.add(john10Line(9));
     lines.add(john14Line());

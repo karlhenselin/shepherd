@@ -1,31 +1,40 @@
-import { GameObjects, Scene } from 'phaser';
+import { GameObjects, Scene, Geom } from 'phaser';
 import { characterDepth, WORLD_HEIGHT, WORLD_WIDTH } from '../world/constants';
 import { Shepherd } from './Shepherd';
 
 const TEXTURE_KEY = 'wolf';
 const SHADOW_KEY = 'wolf-shadow';
-const SIZE = 56;
+const SIZE = 48;
 const SHADOW_OFFSET = 18;
 /** Orbit radius around the flock — nearer the sheep than the old shepherd ring. */
 const SHEEP_ORBIT_DIST = 230;
 const STAFF_SHEEP_ORBIT_DIST = 290;
+/** Aggressive stalker closes in this far when hunting. */
+const HUNT_ORBIT_DIST = 150;
 const APPROACH_DIST = 340;
 const STAFF_APPROACH_DIST = 400;
 const RETREAT_SAFE_DIST = 380;
 const STAFF_RETREAT_SAFE_DIST = 460;
 const ORBIT_SPEED = 78;
+const HUNT_SPEED = 118;
 const FLEE_SPEED = 150;
+const EXIT_SPEED = 92;
 const ORBIT_RAD_PER_MS = 0.00022;
 const RETREAT_MS = 1400;
 /** Shepherd velocity dot toward wolf (normalized) above this counts as walking in. */
 const APPROACH_DOT = 0.28;
+export const WOLF_ATTACK_RANGE = 40;
 const PAD = 80;
+const WALK_PHASE_SPEED = 0.012;
+const MOVE_THRESHOLD = 0.35;
+const WALK_BOB_DEG = 5;
 
-type WolfMode = 'orbit' | 'retreat';
+type WolfMode = 'orbit' | 'retreat' | 'hunt';
 
 /**
  * Night glimpse — heard, not fought. Circles the flock at a distance and
  * slips away if the shepherd walks toward it, then arcs back nearer the sheep.
+ * The night stalker can hunt aggressively; table wolves only script in/out.
  */
 export class Wolf {
     readonly sprite: GameObjects.Sprite;
@@ -37,6 +46,13 @@ export class Wolf {
     private scriptSpeed = ORBIT_SPEED;
     private scriptArrive: (() => void) | null = null;
     private holding = false;
+    private exiting = false;
+    private aggressive = false;
+    private originX = 0;
+    private originY = 0;
+    private walkPhase = 0;
+    private lastX = 0;
+    private lastY = 0;
 
     constructor (scene: Scene, aroundX: number, aroundY: number) {
         ensureWolfTexture(scene);
@@ -44,19 +60,46 @@ export class Wolf {
 
         this.angle = Math.random() * Math.PI * 2;
         const spawn = ringPoint(aroundX, aroundY, SHEEP_ORBIT_DIST, this.angle);
+        this.originX = spawn.x;
+        this.originY = spawn.y;
         this.shadow = scene.add.image(spawn.x, spawn.y + SHADOW_OFFSET, SHADOW_KEY);
+        this.shadow.setDisplaySize(32, 11);
         this.sprite = scene.add.sprite(spawn.x, spawn.y, TEXTURE_KEY);
-        this.sprite.setDisplaySize(SIZE, SIZE);
+        const src = this.sprite.texture.getSourceImage() as { width: number; height: number };
+        this.sprite.setDisplaySize(SIZE * (src.width / Math.max(src.height, 1)), SIZE);
+        this.sprite.setOrigin(0.5, 0.72);
+        this.lastX = spawn.x;
+        this.lastY = spawn.y;
         this.placeShadow();
+    }
+
+    get isAggressive (): boolean {
+        return this.aggressive;
+    }
+
+    get isExiting (): boolean {
+        return this.exiting;
+    }
+
+    setAggressive (aggressive = true): void {
+        this.aggressive = aggressive;
+    }
+
+    setOrigin (x: number, y: number): void {
+        this.originX = x;
+        this.originY = y;
     }
 
     placeAt (x: number, y: number): void {
         this.sprite.setPosition(x, y);
+        this.lastX = x;
+        this.lastY = y;
         this.placeShadow();
     }
 
     /** Walk in a straight line (table-sequence wolves), then fire onArrive. */
     walkTo (x: number, y: number, speed: number, onArrive?: () => void): void {
+        this.exiting = false;
         this.holding = false;
         this.scriptGoal = { x, y };
         this.scriptSpeed = speed;
@@ -68,7 +111,58 @@ export class Wolf {
         this.scriptGoal = null;
         this.scriptArrive = null;
         this.holding = true;
+        this.resetWalkPose();
         this.placeShadow();
+    }
+
+    /** Walk back the way it came; removed once off-screen. */
+    walkAway (awayFromX?: number, awayFromY?: number): void {
+        let dx = this.sprite.x - this.originX;
+        let dy = this.sprite.y - this.originY;
+
+        if (Math.hypot(dx, dy) < 12 && awayFromX !== undefined && awayFromY !== undefined) {
+            dx = this.sprite.x - awayFromX;
+            dy = this.sprite.y - awayFromY;
+        }
+
+        const len = Math.hypot(dx, dy) || 1;
+        this.beginExit(dx / len, dy / len);
+    }
+
+    /** Flee east when the lion charges in from the west. */
+    walkAwayEast (speed = FLEE_SPEED, driftY = 0): void {
+        this.beginExit(1, driftY, speed);
+    }
+
+    private beginExit (dirX: number, dirY: number, speed = EXIT_SPEED): void {
+        this.exiting = true;
+        this.holding = false;
+        this.aggressive = false;
+        this.mode = 'orbit';
+        this.scriptArrive = null;
+
+        const len = Math.hypot(dirX, dirY) || 1;
+        const far = 1400;
+        this.scriptGoal = {
+            x: this.sprite.x + (dirX / len) * far,
+            y: this.sprite.y + (dirY / len) * far
+        };
+        this.scriptSpeed = speed;
+
+        if (Math.abs(dirX) > 0.08) {
+            this.sprite.setFlipX(dirX < 0);
+        }
+    }
+
+    isOffScreen (view: Geom.Rectangle, margin = 72): boolean {
+        const { x, y } = this.sprite;
+
+        return (
+            x < view.left - margin
+            || x > view.right + margin
+            || y < view.top - margin
+            || y > view.bottom + margin
+        );
     }
 
     update (shepherd: Shepherd, deltaMs: number, sheep: { x: number; y: number }[] = []): void {
@@ -76,12 +170,20 @@ export class Wolf {
             return;
         }
 
+        if (this.exiting) {
+            this.tickScript(deltaMs);
+            this.tickWalkAnim(deltaMs);
+            return;
+        }
+
         if (this.scriptGoal) {
             this.tickScript(deltaMs);
+            this.tickWalkAnim(deltaMs);
             return;
         }
 
         if (this.holding) {
+            this.resetWalkPose();
             this.placeShadow();
             return;
         }
@@ -99,7 +201,7 @@ export class Wolf {
         const orbitDist = hasStaff ? STAFF_SHEEP_ORBIT_DIST : SHEEP_ORBIT_DIST;
         const focus = flockFocus(sheep, sx, sy);
         const now = this.sprite.scene.time.now;
-        const body = shepherd.sprite.body as Physics.Arcade.Body | null;
+        const body = shepherd.sprite.body as Phaser.Physics.Arcade.Body | null;
         const speed = Math.hypot(body?.velocity.x ?? 0, body?.velocity.y ?? 0);
         const approachDot = speed > 12 && body
             ? (body.velocity.x * toWolfX + body.velocity.y * toWolfY) / (speed * dist)
@@ -108,27 +210,34 @@ export class Wolf {
         if (this.mode === 'retreat') {
             this.tickRetreat(sx, sy, safeDist, now, deltaMs);
         }
+        else if (approachDot > APPROACH_DOT && dist < approachDist) {
+            this.beginRetreat(focus, sx, sy, now);
+            this.tickRetreat(sx, sy, safeDist, now, deltaMs);
+        }
+        else if (this.aggressive && sheep.length > 0) {
+            this.mode = 'hunt';
+            this.tickHunt(sheep, deltaMs);
+        }
         else {
-            if (approachDot > APPROACH_DOT && dist < approachDist) {
-                this.beginRetreat(focus, sx, sy, now);
-                this.tickRetreat(sx, sy, safeDist, now, deltaMs);
-            }
-            else {
-                this.tickOrbit(focus, orbitDist, deltaMs);
-            }
+            this.mode = 'orbit';
+            this.tickOrbit(focus, orbitDist, deltaMs);
         }
 
         if (Math.abs(sx - wx) > 8) {
             this.sprite.setFlipX(sx < wx);
         }
 
-        this.placeShadow();
+        this.tickWalkAnim(deltaMs);
+    }
+
+    destroy (): void {
+        this.sprite.destroy();
+        this.shadow.destroy();
     }
 
     private beginRetreat (focus: { x: number; y: number }, shepherdX: number, shepherdY: number, now: number): void {
         this.mode = 'retreat';
         this.retreatUntil = now + RETREAT_MS;
-        // Resume orbit on the flock side away from the shepherd so the wolf circles back in.
         this.angle = Math.atan2(focus.y - shepherdY, focus.x - shepherdX);
     }
 
@@ -150,7 +259,40 @@ export class Wolf {
         const newDist = Math.hypot(nx - shepherdX, ny - shepherdY);
 
         if (now >= this.retreatUntil && newDist >= safeDist) {
-            this.mode = 'orbit';
+            this.mode = this.aggressive ? 'hunt' : 'orbit';
+        }
+    }
+
+    private tickHunt (sheep: { x: number; y: number }[], deltaMs: number): void {
+        let nearest = sheep[0];
+        let best = Infinity;
+
+        for (const point of sheep) {
+            const d = Math.hypot(point.x - this.sprite.x, point.y - this.sprite.y);
+
+            if (d < best) {
+                best = d;
+                nearest = point;
+            }
+        }
+
+        const tx = nearest.x - this.sprite.x;
+        const ty = nearest.y - this.sprite.y;
+        const gap = Math.hypot(tx, ty);
+
+        if (gap > HUNT_ORBIT_DIST) {
+            const step = Math.min(gap - HUNT_ORBIT_DIST, HUNT_SPEED * (deltaMs / 1000));
+            this.sprite.x += (tx / gap) * step;
+            this.sprite.y += (ty / gap) * step;
+        }
+        else if (gap > 4) {
+            const step = Math.min(gap, HUNT_SPEED * 0.65 * (deltaMs / 1000));
+            this.sprite.x += (tx / gap) * step;
+            this.sprite.y += (ty / gap) * step;
+        }
+
+        if (Math.abs(tx) > 8) {
+            this.sprite.setFlipX(tx < 0);
         }
     }
 
@@ -166,11 +308,6 @@ export class Wolf {
             this.sprite.x += (tx / gap) * step;
             this.sprite.y += (ty / gap) * step;
         }
-    }
-
-    destroy (): void {
-        this.sprite.destroy();
-        this.shadow.destroy();
     }
 
     private tickScript (deltaMs: number): void {
@@ -189,6 +326,7 @@ export class Wolf {
             const arrived = this.scriptArrive;
             this.scriptArrive = null;
             arrived?.();
+            this.resetWalkPose();
             this.placeShadow();
             return;
         }
@@ -202,6 +340,28 @@ export class Wolf {
         }
 
         this.placeShadow();
+    }
+
+    /** Gentle lope — angle only; never touch scale after setDisplaySize (1024px PNG). */
+    private tickWalkAnim (deltaMs: number): void {
+        const x = this.sprite.x;
+        const y = this.sprite.y;
+        const moved = Math.hypot(x - this.lastX, y - this.lastY);
+        this.lastX = x;
+        this.lastY = y;
+
+        if (moved < MOVE_THRESHOLD) {
+            this.resetWalkPose();
+            return;
+        }
+
+        this.walkPhase += deltaMs * WALK_PHASE_SPEED;
+        this.sprite.setAngle(Math.sin(this.walkPhase) * WALK_BOB_DEG);
+        this.placeShadow();
+    }
+
+    private resetWalkPose (): void {
+        this.sprite.setAngle(0);
     }
 
     private placeShadow (): void {

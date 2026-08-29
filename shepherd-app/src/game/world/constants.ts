@@ -80,6 +80,16 @@ export function findPointAwayFromAll (
     };
 }
 
+/** Sheepfold corner: farthest from the map start. */
+export function defaultPenSpot (): { x: number; y: number } {
+    return farthestCornerFrom(startCenter());
+}
+
+/** New Jerusalem: the corner opposite the pen. */
+export function defaultCitySpot (): { x: number; y: number } {
+    return farthestCornerFrom(defaultPenSpot());
+}
+
 export function farthestCornerFrom (point: { x: number; y: number }): { x: number; y: number } {
     const padX = 320;
     const padY = 260;

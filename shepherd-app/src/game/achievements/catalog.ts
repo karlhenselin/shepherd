@@ -17,6 +17,7 @@ export const ACHIEVEMENT_IDS = [
     'prepared_table',
     'the_gate',
     'we_shall_be_changed',
+    'entered_the_city',
     'first_bible_gem',
     'gem_collector',
     'bible_treasure_hunter',
@@ -94,6 +95,11 @@ export const ACHIEVEMENTS: AchievementDef[] = [
         earned: (save) => save.heardCorinthians === true || save.whiteRobe === true
     },
     {
+        id: 'entered_the_city',
+        title: 'Entered the City',
+        earned: (save) => save.heardCity === true || save.checkpoint === 'entered-city'
+    },
+    {
         id: 'first_bible_gem',
         title: 'First Bible Gem',
         earned: (save) => (save.foundGems?.length ?? 0) >= 1
@@ -137,6 +143,7 @@ export const ANDROID_ACHIEVEMENT_IDS: Record<AchievementId, string> = {
     prepared_table: '',
     the_gate: '',
     we_shall_be_changed: '',
+    entered_the_city: '',
     first_bible_gem: '',
     gem_collector: '',
     bible_treasure_hunter: '',

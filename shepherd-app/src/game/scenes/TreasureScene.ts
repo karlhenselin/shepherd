@@ -57,7 +57,9 @@ export class TreasureScene extends Scene {
             heardPsalm6: save?.heardPsalm6,
             heardJohn102: save?.heardJohn102,
             heardJohn109: save?.heardJohn109,
-            heardCorinthians: save?.heardCorinthians
+            heardCorinthians: save?.heardCorinthians,
+            heardCity: save?.heardCity,
+            foundNames: save?.foundNames
         };
 
         const { width, height } = this.scale;

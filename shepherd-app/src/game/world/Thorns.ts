@@ -38,6 +38,8 @@ const STALKS: StalkSpec[] = [
 
 export class Thorns {
     readonly sprite: GameObjects.Sprite;
+    /** After 1 Corinthians 15:51, roses bloom and the bush no longer snares. */
+    bloomed = false;
 
     constructor (scene: Scene, x: number, y: number) {
         ensureThornsTexture(scene);
@@ -45,6 +47,17 @@ export class Thorns {
         this.sprite.setDisplaySize(DISPLAY_SIZE, DISPLAY_SIZE);
         this.sprite.setOrigin(0.5, 0.92);
         this.sprite.setDepth(characterDepth(y));
+    }
+
+    bloom (): void {
+        if (this.bloomed) {
+            return;
+        }
+
+        this.bloomed = true;
+        this.sprite.setTexture('thorns-roses');
+        this.sprite.setDisplaySize(DISPLAY_SIZE, DISPLAY_SIZE);
+        this.sprite.setOrigin(0.5, 0.92);
     }
 
     get x (): number {

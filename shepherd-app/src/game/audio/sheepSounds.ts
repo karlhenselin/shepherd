@@ -239,6 +239,10 @@ export function playStrayBaah (scene: Scene, sheep: Sheep, listener: { x: number
 
 /** Soft happy baah when the shepherd pets a sheep. */
 export function playHappyBaah (scene: Scene, sheep: Sheep, listener: { x: number; y: number }): boolean {
+    if (sheep.peaceable) {
+        return false;
+    }
+
     if (!canPlayBleats(scene)) {
         return false;
     }
@@ -346,6 +350,10 @@ function maybeBleat (scene: Scene, sheep: Sheep, listener: { x: number; y: numbe
 }
 
 function shouldBleat (sheep: Sheep): boolean {
+    if (sheep.peaceable) {
+        return false;
+    }
+
     return sheep.mood !== 'penned' && sheep.mood !== 'eating' && sheep.mood !== 'drinking';
 }
 
@@ -394,7 +402,7 @@ function playBleat (scene: Scene, sheep: Sheep, listener: { x: number; y: number
 }
 
 function pickNightSheep (flock: Sheep[]): Sheep | null {
-    const eligible = flock.filter((sheep) => !sheep.hurt && !sheep.isBusy);
+    const eligible = flock.filter((sheep) => !sheep.hurt && !sheep.isBusy && !sheep.peaceable);
 
     if (eligible.length === 0) {
         return null;

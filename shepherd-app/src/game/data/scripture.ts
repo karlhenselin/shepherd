@@ -129,6 +129,45 @@ export function corinthians15Line (): string {
     return `${CORINTHIANS_15_51.text}\n— ${CORINTHIANS_15_51.ref}`;
 }
 
+export const ISAIAH_11_6 = {
+    ref: 'Isaiah 11:6',
+    text: 'The wolf will live with the lamb, and the leopard will lie down with the goat; the calf and young lion and fattened ox will be together, and a little child will lead them.',
+    wolf: {
+        ref: 'Isaiah 11:6',
+        text: 'The calf and the young lion will lie down together, and a little child will lead them.'
+    },
+    lion: {
+        ref: 'Isaiah 11:6',
+        text: 'The wolf will live with the lamb.'
+    }
+} as const;
+
+export function isaiah11WolfLine (): string {
+    return `${ISAIAH_11_6.wolf.text} — ${ISAIAH_11_6.wolf.ref}`;
+}
+
+export function isaiah11LionLine (): string {
+    return `${ISAIAH_11_6.lion.text} — ${ISAIAH_11_6.lion.ref}`;
+}
+
+export const ISAIAH_26_2 = {
+    ref: 'Isaiah 26:2',
+    text: 'Open the gates that the righteous nation may enter, the nation that keeps faith.'
+} as const;
+
+export function isaiah26Line (): string {
+    return `${ISAIAH_26_2.text} — ${ISAIAH_26_2.ref}`;
+}
+
+export const REVELATION_21_2 = {
+    ref: 'Revelation 21:2',
+    text: 'I saw the Holy City, the new Jerusalem, coming down out of heaven from God.'
+} as const;
+
+export function revelation21CityLine (): string {
+    return `${REVELATION_21_2.text} — ${REVELATION_21_2.ref}`;
+}
+
 /** Findable Bible gems from `Bible gems.md`. */
 export const BIBLE_GEMS = [
     { id: 'john-3-16', ref: 'John 3:16', text: 'For God so loved the world that He gave His one and only Son, that everyone who believes in Him shall not perish but have eternal life.' },
@@ -214,7 +253,9 @@ export const STORY_PASSAGES = [
     JOHN_10[2],
     JOHN_14_6,
     JOHN_10[9],
-    CORINTHIANS_15_51
+    CORINTHIANS_15_51,
+    ISAIAH_26_2,
+    REVELATION_21_2
 ] as const;
 
 export type StoryPassageFlags = {
@@ -231,6 +272,8 @@ export type StoryPassageFlags = {
     heardJohn102?: boolean;
     heardJohn109?: boolean;
     heardCorinthians?: boolean;
+    heardCity?: boolean;
+    foundNames?: string[];
 };
 
 export function unlockedStoryPassages (flags: StoryPassageFlags): { ref: string; text: string }[] {
@@ -286,6 +329,14 @@ export function unlockedStoryPassages (flags: StoryPassageFlags): { ref: string;
 
     if (flags.heardCorinthians) {
         unlocked.push(CORINTHIANS_15_51);
+    }
+
+    if (flags.heardCity) {
+        unlocked.push(ISAIAH_26_2, REVELATION_21_2);
+    }
+
+    if (flags.foundNames?.some((name) => name === 'Wolf' || name === 'Leo' || name === 'Lion')) {
+        unlocked.push(ISAIAH_11_6);
     }
 
     return unlocked;

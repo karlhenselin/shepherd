@@ -1,4 +1,5 @@
-import { farthestCornerFrom, PASTURE_COL, PASTURE_ROW, regionCenter, startCenter, WATER_COL, WATER_ROW } from '../world/constants';
+import { defaultCitySpot, farthestCornerFrom, PASTURE_COL, PASTURE_ROW, regionCenter, startCenter, WATER_COL, WATER_ROW } from '../world/constants';
+import { CITY_APPROACH_Y } from '../world/Jerusalem';
 import { GameSave, StoryCheckpoint } from './gameSave';
 
 const FLOCK = ['Clover', 'Snowball', 'Milo', 'Biscuit'] as const;
@@ -26,7 +27,10 @@ export const CHEAT_SPOTS: CheatSpot[] = [
     { label: 'Psalm 23:4c — rod and staff', save: psalm234c() },
     { label: 'John 10:2 — at the pen', save: john102() },
     { label: 'John 10:9 — I am the gate', save: john109() },
-    { label: '1 Corinthians 15:51 — changed', save: corinthians() }
+    { label: '1 Corinthians 15:51 — changed', save: corinthians() },
+    { label: 'Find the lion', save: findLion() },
+    { label: 'Find the wolf', save: findWolf() },
+    { label: 'Enter the city', save: enterCity() }
 ];
 
 function blank (checkpoint: StoryCheckpoint, extra: Partial<GameSave> = {}): GameSave {
@@ -50,6 +54,7 @@ function blank (checkpoint: StoryCheckpoint, extra: Partial<GameSave> = {}): Gam
         heardJohn102: false,
         heardJohn109: false,
         heardCorinthians: false,
+        heardCity: false,
         hasStaff: false,
         staff: null,
         player: start,
@@ -215,14 +220,46 @@ function john109 (): GameSave {
     });
 }
 
-function corinthians (): GameSave {
-    return atPen('1-cor-15-51', {
+function afterChange (checkpoint: StoryCheckpoint, extra: Partial<GameSave> = {}): GameSave {
+    return atPen(checkpoint, {
         heardPsalm4b: true,
         heardPsalm4c: true,
         heardJohn102: true,
         heardJohn109: true,
         heardCorinthians: true,
         hasStaff: true,
-        whiteRobe: true
+        whiteRobe: true,
+        ...extra
+    });
+}
+
+function corinthians (): GameSave {
+    return afterChange('1-cor-15-51');
+}
+
+function findLion (): GameSave {
+    return afterChange('found-sheep', {
+        waitingName: 'Leo',
+        nextNames: ['Wolf']
+    });
+}
+
+function findWolf (): GameSave {
+    return afterChange('found-sheep', {
+        foundNames: [...FLOCK, 'Leo'],
+        waitingName: 'Wolf',
+        nextNames: []
+    });
+}
+
+function enterCity (): GameSave {
+    const city = defaultCitySpot();
+
+    return afterChange('enter-city', {
+        foundCount: 6,
+        foundNames: [...FLOCK, 'Leo', 'Wolf'],
+        waitingName: null,
+        nextNames: [],
+        player: { x: city.x, y: city.y + CITY_APPROACH_Y }
     });
 }
