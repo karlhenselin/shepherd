@@ -26,7 +26,7 @@ import { speakCue, stopSpeech } from '../ui/speech';
 import { playGemDing, tickWalkSound } from '../audio/cues';
 import { startHowling, stopHowling, suspendHowling, syncHowling, unsuspendHowling } from '../audio/howl';
 import { isSoundOn, setSoundOn } from '../audio/soundPref';
-import { WANDERLUST_KEY, WONDERS_KEY, applySavedWorldMusic, clearWorldMusicProgress, clearWorldMusicSeek, fadeInWorldMusic, fadeOutWorldMusic, getWorldMusicProgress, isWorldMusicKey, setWorldMusicTrack, startWorldMusic, stopWorldMusic } from '../audio/worldMusic';
+import { WANDERLUST_KEY, WONDERS_KEY, EARTH_IN_BLOOM_KEY, applySavedWorldMusic, clearWorldMusicProgress, clearWorldMusicSeek, fadeInWorldMusic, fadeOutWorldMusic, getActiveWorldMusicKey, getWorldMusicProgress, isWorldMusicKey, setWorldMusicTrack, startWorldMusic, stopWorldMusic } from '../audio/worldMusic';
 import { cueWaitingBleat, holdSheepSounds, playHappyBaah, playLaggingBaah, playStrayBaah, stopSheepSounds, tickNightBaahs as tickNightFlockBaahs, tickSheepSounds } from '../audio/sheepSounds';
 import { corinthians15Line, isaiah11LionLine, isaiah11WolfLine, isaiah53Line, john10Line, john14Line, psalm23Comfort, psalm23FiveTable, psalm23Half, revelation21CityLine } from '../data/scripture';
 import { nextWaterVerseId, waterVerseLine } from '../data/waterVerses';
@@ -64,6 +64,8 @@ const BANDAGE_HEAL_AT_MS = 650;
 const THORN_REARM_WALK = 300;
 /** After a shade sit, stay off until the shepherd walks this far from the tree (pets + revisit). */
 const TREE_REST_COOLDOWN_PX = 300;
+/** After a flock drink, stay off until the shepherd walks this far from the water. */
+const WATER_DRINK_COOLDOWN_PX = 300;
 const HOLE_ASIDE_DIST = 156;
 const HOLE_ENTER_NUDGE = 16;
 /** Pause stray teleport / lag warning and walk-into petting while shepherd is this close to the hole. */
@@ -203,7 +205,10 @@ export class WorldScene extends Scene {
     private penTableStarted = false;
     /** Walk into the south opening without fence keep-outs, then lie down as the gate. */
     private walkingToGate = false;
-    private waterVisit: WaterSource | null = null;
+    /** Pond the flock just drank at; locked until the shepherd walks `WATER_DRINK_COOLDOWN_PX` away. */
+    private waterHold: WaterSource | null = null;
+    private drinkCuePlayed = false;
+    private drinkGatherAt = 0;
     private treeVisit: ShadeTree | null = null;
     /** After a shade sit, locked until the shepherd walks `TREE_REST_COOLDOWN_PX` from the tree. */
     private treePetFrom: { x: number; y: number } | null = null;
@@ -493,7 +498,8 @@ export class WorldScene extends Scene {
         this.tickPetting();
         this.maybePickupStaff();
         this.maybeCollectGem();
-        this.maybeWaysideWater();
+        this.maybeFlockDrink();
+        this.maybeStartFlockSip();
         this.maybeShadeTree();
         this.maybeReachPen();
         this.maybeEnterCity();
@@ -683,11 +689,17 @@ export class WorldScene extends Scene {
         });
     }
 
-    private onDrank (sheep: Sheep): void {
+    private onDrank (_sheep: Sheep): void {
+        if (this.drinkCuePlayed) {
+            return;
+        }
+
+        this.drinkCuePlayed = true;
+
         if (!this.heardPsalm2b) {
             this.heardPsalm2b = true;
             this.playLines([
-                `${sheep.name} is drinking.`,
+                'The flock is drinking.',
                 psalm23Half(2, 'b')
             ], () => {
                 this.spawnNextSheep();
@@ -704,7 +716,7 @@ export class WorldScene extends Scene {
         this.foundWaterVerses.push(verseId);
         this.saveProgress(this.lastCheckpoint ?? 'found-gem');
         this.playLines([
-            `${sheep.name} is drinking.`,
+            'The flock is drinking.',
             waterVerseLine(verseId)
         ]);
     }
@@ -808,10 +820,10 @@ export class WorldScene extends Scene {
             return `${eating.name} is eating.`;
         }
 
-        const drinking = this.flock.find((sheep) => sheep.mood === 'drinking');
+        const drinking = this.flock.some((sheep) => sheep.mood === 'drinking');
 
         if (drinking) {
-            return `${drinking.name} is drinking.`;
+            return 'The flock is drinking.';
         }
 
         const wandered = this.flock.find((sheep) => sheep.mood === 'waiting' && sheep.discovered);
@@ -840,7 +852,7 @@ export class WorldScene extends Scene {
             return 'The sheep are hungry.';
         }
 
-        if (this.flock.some((sheep) => sheep.thirsty)) {
+        if (this.flock.some((sheep) => sheep.thirsty) && !this.heardCorinthians) {
             return 'The sheep are thirsty.';
         }
 
@@ -1214,7 +1226,9 @@ export class WorldScene extends Scene {
         this.foundTreeVerses = [];
         this.penTableStarted = false;
         this.walkingToGate = false;
-        this.waterVisit = null;
+        this.waterHold = null;
+        this.drinkCuePlayed = false;
+        this.drinkGatherAt = 0;
         this.treeVisit = null;
         this.lastCue = '';
         this.scriptPlaying = false;
@@ -1886,6 +1900,8 @@ export class WorldScene extends Scene {
         }
 
         this.heardCity = true;
+        setWorldMusicTrack(this, EARTH_IN_BLOOM_KEY);
+        fadeInWorldMusic(this, 800);
         this.playLines([revelation21CityLine()]);
     }
 
@@ -2309,28 +2325,86 @@ export class WorldScene extends Scene {
         this.departingWolves = remaining;
     }
 
-    private maybeWaysideWater (): void {
-        if (this.nightStarted || this.scriptPlaying || this.bandageRescuing || this.penTableStarted) {
-            this.waterVisit = null;
+    private maybeFlockDrink (): void {
+        if (this.nightStarted || this.bandageRescuing || this.penTableStarted) {
             return;
         }
 
-        const pond = this.water.find((source) => source.isNear(this.shepherd.sprite.x, this.shepherd.sprite.y));
+        if (this.waterHold) {
+            const away = Math.hypot(
+                this.shepherd.sprite.x - this.waterHold.x,
+                this.shepherd.sprite.y - this.waterHold.y
+            );
+            const stillBusy = this.flock.some((sheep) => sheep.mood === 'drinking' || sheep.thirsty);
+
+            if (away >= WATER_DRINK_COOLDOWN_PX && !stillBusy) {
+                this.waterHold = null;
+            }
+
+            if (this.waterHold) {
+                return;
+            }
+        }
+
+        const pond = this.water.find((source) =>
+            source.isNear(this.shepherd.sprite.x, this.shepherd.sprite.y)
+        );
 
         if (!pond) {
-            this.waterVisit = null;
             return;
         }
 
-        if (this.waterVisit === pond) {
+        this.beginFlockDrink(pond);
+    }
+
+    private beginFlockDrink (pond: WaterSource): void {
+        const drinkers = this.flock.filter((sheep) =>
+            sheep.mood === 'following' && !sheep.hurt && !sheep.isDancing && !sheep.isScooting
+        );
+
+        if (drinkers.length === 0) {
             return;
         }
 
-        this.waterVisit = pond;
+        this.waterHold = pond;
+        this.drinkCuePlayed = false;
+        this.drinkGatherAt = this.time.now;
 
-        for (const sheep of this.flock) {
-            if (sheep.mood === 'following' && !sheep.hurt) {
-                sheep.thirsty = true;
+        drinkers.forEach((sheep, slot) => {
+            const spot = pond.drinkSpot(slot, drinkers.length);
+            sheep.walkToDrink(spot.x, spot.y, pond.x);
+        });
+    }
+
+    private maybeStartFlockSip (): void {
+        const gathering = this.flock.filter((sheep) =>
+            sheep.thirsty && sheep.mood !== 'drinking' && !sheep.hurt
+        );
+
+        if (gathering.length === 0) {
+            return;
+        }
+
+        const allHere = gathering.every((sheep) => sheep.atDrinkSpot);
+        const timedOut = this.drinkGatherAt > 0 && this.time.now - this.drinkGatherAt > 4500;
+
+        if (!allHere && !timedOut) {
+            return;
+        }
+
+        const sippers = timedOut ? gathering.filter((sheep) => sheep.atDrinkSpot) : gathering;
+
+        if (sippers.length === 0) {
+            return;
+        }
+
+        const now = this.time.now;
+        let announced = false;
+
+        for (const sheep of sippers) {
+            if (sheep.beginSip(now) && !announced) {
+                this.onDrank(sheep);
+                announced = true;
             }
         }
     }
@@ -2782,6 +2856,11 @@ export class WorldScene extends Scene {
 
     private playWorldMusic (): void {
         if (this.nightStarted) {
+            return;
+        }
+
+        if (getActiveWorldMusicKey() === EARTH_IN_BLOOM_KEY) {
+            startWorldMusic(this);
             return;
         }
 

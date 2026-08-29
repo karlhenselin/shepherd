@@ -13,6 +13,7 @@ const NIGHT_FOLLOW_DISTANCE = 41;
 /** Side-by-side spread along the trail (perpendicular to travel). */
 const FOLLOW_LATERAL = 28;
 const DRINK_MS = 2600;
+const DRINK_ARRIVE = 16;
 const EAT_MS = 2600;
 const SNACK_COOLDOWN_MS = 9000;
 const SHEEP_SIZE = 48;
@@ -139,6 +140,10 @@ export class Sheep {
     private penPath: { x: number; y: number }[] = [];
     /** Sit aside during hole rescue (not in the pit). */
     private rescueWait: { x: number; y: number } | null = null;
+    /** Shore spot to walk to before sipping. */
+    private drinkSpot: { x: number; y: number } | null = null;
+    /** Face the lake while drinking. */
+    private drinkFaceX = 0;
     /** Tuft this sheep is walking toward or chewing. */
     private eatPatch: GrassPatch | null = null;
     /** Wolf or lion that joined the flock after 1 Corinthians 15:51. */
@@ -245,6 +250,7 @@ export class Sheep {
         this.mood = 'following';
         this.rescueWait = null;
         this.eatPatch = null;
+        this.drinkSpot = null;
         this.penPath = [];
         this.penTarget = null;
         this.body.setImmovable(false);
@@ -254,6 +260,7 @@ export class Sheep {
     becomeLost (x: number, y: number): void {
         this.clearHappyDance();
         this.rescueWait = null;
+        this.drinkSpot = null;
         this.mood = 'waiting';
         this.penTarget = null;
         this.penPath = [];
@@ -462,6 +469,7 @@ export class Sheep {
                 this.sprite.setAngle(0);
                 this.mood = 'following';
                 this.thirsty = false;
+                this.drinkSpot = null;
             }
 
             return null;
@@ -538,6 +546,14 @@ export class Sheep {
             return null;
         }
 
+        if (this.thirsty) {
+            const thirst = this.tickThirst(now);
+
+            if (thirst === 'walking') {
+                return null;
+            }
+        }
+
         if (this.hungry || this.snack) {
             const hunger = this.tickHunger(grass, now);
 
@@ -548,10 +564,6 @@ export class Sheep {
             if (hunger === 'walking') {
                 return null;
             }
-        }
-
-        if (this.thirsty && this.tryDrink(water, now)) {
-            return 'drank';
         }
 
         let { targetX, targetY } = this.trailTarget(shepherd, huddle);
@@ -847,6 +859,70 @@ export class Sheep {
         return 'ate';
     }
 
+    /** True once this sheep has reached its shore spot and is waiting to sip. */
+    get atDrinkSpot (): boolean {
+        if (!this.drinkSpot || this.hurt) {
+            return false;
+        }
+
+        return Math.hypot(this.drinkSpot.x - this.sprite.x, this.drinkSpot.y - this.sprite.y) <= DRINK_ARRIVE;
+    }
+
+    /** Walk to a shore spot, then sip facing the lake. */
+    walkToDrink (x: number, y: number, faceX: number): void {
+        if (this.hurt || this.mood === 'penned' || this.mood === 'waiting') {
+            return;
+        }
+
+        this.thirsty = true;
+        this.drinkSpot = { x, y };
+        this.drinkFaceX = faceX;
+        this.eatPatch = null;
+
+        if (this.mood === 'eating' || this.mood === 'drinking') {
+            this.mood = 'following';
+            this.sprite.setAngle(0);
+        }
+
+        this.body.setImmovable(false);
+    }
+
+    private tickThirst (now: number): 'walking' | null {
+        if (!this.drinkSpot) {
+            return null;
+        }
+
+        const dist = Math.hypot(this.drinkSpot.x - this.sprite.x, this.drinkSpot.y - this.sprite.y);
+
+        if (dist > DRINK_ARRIVE) {
+            this.moveToward(this.drinkSpot.x, this.drinkSpot.y, this.trailSpeed());
+            this.sprite.setAngle(this.waddleAngle(now));
+            this.faceVelocity();
+            this.placeShadow();
+            return 'walking';
+        }
+
+        this.body.setVelocity(0, 0);
+        this.sprite.setAngle(0);
+        this.sprite.setFlipX(this.drinkFaceX < this.sprite.x);
+        this.placeShadow();
+        return 'walking';
+    }
+
+    beginSip (now: number): boolean {
+        if (this.mood === 'drinking') {
+            return false;
+        }
+
+        this.mood = 'drinking';
+        this.drinkUntil = now + DRINK_MS;
+        this.body.setVelocity(0, 0);
+        this.sprite.setAngle(12);
+        this.sprite.setFlipX(this.drinkFaceX < this.sprite.x);
+        this.placeShadow();
+        return true;
+    }
+
     private pickEatPatch (grass: GrassPatch[]): GrassPatch | null {
         if (this.eatPatch?.available) {
             return this.eatPatch;
@@ -869,19 +945,6 @@ export class Sheep {
         }
 
         return nearest;
-    }
-
-    private tryDrink (water: WaterSource[], now: number): boolean {
-        if (!water.some((source) => source.isNear(this.sprite.x, this.sprite.y))) {
-            return false;
-        }
-
-        this.mood = 'drinking';
-        this.drinkUntil = now + DRINK_MS;
-        this.body.setVelocity(0, 0);
-        this.sprite.setAngle(12);
-        this.placeShadow();
-        return true;
     }
 
     private moveToward (x: number, y: number, speed: number): void {

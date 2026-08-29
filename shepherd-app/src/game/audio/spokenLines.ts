@@ -34,6 +34,7 @@ const STATIC_LINES = [
     'A sheep is missing.',
     'Get closer.',
     'The sheep are thirsty.',
+    'The flock is drinking.',
     'The sheep are hungry.',
     'Enlarge the flock.',
     'Enter the city.',

@@ -45,6 +45,7 @@ export class Preloader extends Scene
         this.load.audio('exhale', 'audio/exhale.mp3');
         this.load.audio('wanderlust', 'music/wanderlust-justin-lee-main-version-29117-01-40.mp3');
         this.load.audio('wonders-of-nature', 'music/wonders-of-nature-roger-gabalda-main-version-01-31-11044.mp3');
+        this.load.audio('earth-in-bloom', 'music/earth-in-bloom-richard-bodgers-main-version-00-59-7489.mp3');
         loadSheepSounds(this.load);
         loadHowlSounds(this.load);
         loadCueSounds(this.load);

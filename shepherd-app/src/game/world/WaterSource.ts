@@ -33,6 +33,19 @@ export class WaterSource {
         return Math.hypot(this.x - x, this.y - y) < this.range;
     }
 
+    /** Stand on the shore, evenly spaced around the lake. */
+    drinkSpot (slot: number, count: number): { x: number; y: number } {
+        const n = Math.max(count, 1);
+        const angle = -Math.PI / 2 + (slot / n) * Math.PI * 2;
+        const rx = this.sprite.displayWidth * 0.5 + 32;
+        const ry = this.sprite.displayHeight * 0.5 + 32;
+
+        return {
+            x: this.x + Math.cos(angle) * rx,
+            y: this.y + Math.sin(angle) * ry
+        };
+    }
+
     /** Minimum center distance so brambles do not overlap the lake sprite. */
     keepOutRadius (): number {
         return Math.max(this.sprite.displayWidth, this.sprite.displayHeight) * 0.55 + 24;

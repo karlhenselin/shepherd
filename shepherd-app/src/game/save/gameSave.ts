@@ -38,7 +38,7 @@ export type GameSave = {
     foundTreeVerses?: string[];
     /** Logical Play Games achievement ids already earned (local queue). */
     unlockedAchievements?: string[];
-    /** Active world BGM key (`wanderlust` / `wonders-of-nature`). Optional for older saves. */
+    /** Active world BGM key (`wanderlust` / `wonders-of-nature` / `earth-in-bloom`). Optional for older saves. */
     musicKey?: string;
     /** Playback position in seconds. Day progress saves keep this; night / dawn resets to 0. Optional for older saves; missing/invalid → start at 0. */
     musicSeek?: number;

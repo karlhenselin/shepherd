@@ -99,10 +99,10 @@ export function placePasture (scene: Scene, center: { x: number; y: number }): G
 /** Smaller grazing spots away from the story pasture. */
 function placeGrassExtras (scene: Scene): GrassPatch[] {
     const clusters = [
-        { col: 4, row: 3, spots: [[0, 0], [34, 16], [-26, 20], [18, -28]] },
-        { col: 1, row: 5, spots: [[0, 0], [30, -14], [-24, 18]] },
-        { col: 5, row: 1, spots: [[0, 0], [-32, 22], [20, -18]] },
-        { col: 3, row: 4, spots: [[0, 0], [28, 24], [-30, -16]] }
+        { col: 4, row: 3, spots: [[0, 0], [34, 16], [-26, 20], [18, -28], [-32, -14], [42, 8]] },
+        { col: 1, row: 5, spots: [[0, 0], [30, -14], [-24, 18], [22, 22], [-28, -12], [8, -32]] },
+        { col: 5, row: 1, spots: [[0, 0], [-32, 22], [20, -18], [28, 18], [-18, -24], [8, 32]] },
+        { col: 3, row: 4, spots: [[0, 0], [28, 24], [-30, -16], [32, -14], [-22, 22], [6, -34]] }
     ];
     const patches: GrassPatch[] = [];
 

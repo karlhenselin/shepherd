@@ -2,8 +2,9 @@ import { Scene, Sound, Tweens } from 'phaser';
 
 export const WANDERLUST_KEY = 'wanderlust';
 export const WONDERS_KEY = 'wonders-of-nature';
+export const EARTH_IN_BLOOM_KEY = 'earth-in-bloom';
 
-const TRACKS = [WANDERLUST_KEY, WONDERS_KEY] as const;
+const TRACKS = [WANDERLUST_KEY, WONDERS_KEY, EARTH_IN_BLOOM_KEY] as const;
 export type WorldMusicKey = typeof TRACKS[number];
 
 const VOLUME = 0.4;
@@ -32,7 +33,15 @@ let lastSeek = 0;
 let ignoreLiveSeek = false;
 
 export function isWorldMusicKey (key: string | undefined | null): key is WorldMusicKey {
-    return key === WANDERLUST_KEY || key === WONDERS_KEY;
+    return key === WANDERLUST_KEY || key === WONDERS_KEY || key === EARTH_IN_BLOOM_KEY;
+}
+
+export function getActiveWorldMusicKey (): WorldMusicKey {
+    return activeKey;
+}
+
+function trackLoops (key: WorldMusicKey): boolean {
+    return key !== EARTH_IN_BLOOM_KEY;
 }
 
 /**
@@ -131,6 +140,22 @@ function consumePendingSeek (music: VolumeSound): number | undefined {
     return seek > 0 ? seek : undefined;
 }
 
+function armEarthBloomReturn (scene: Scene, music: VolumeSound): void {
+    if (activeKey !== EARTH_IN_BLOOM_KEY) {
+        return;
+    }
+
+    music.off('complete');
+    music.once('complete', () => {
+        if (!stillInWorld(scene) || activeKey !== EARTH_IN_BLOOM_KEY) {
+            return;
+        }
+
+        setWorldMusicTrack(scene, WONDERS_KEY);
+        startWorldMusic(scene);
+    });
+}
+
 function playIfNeeded (scene: Scene, volume = VOLUME): void {
     if (!stillInWorld(scene) || !scene.cache.audio.exists(activeKey)) {
         return;
@@ -140,7 +165,7 @@ function playIfNeeded (scene: Scene, volume = VOLUME): void {
 
     if (!music) {
         music = scene.sound.add(activeKey, {
-            loop: true,
+            loop: trackLoops(activeKey),
             volume
         }) as VolumeSound;
     }
@@ -151,11 +176,12 @@ function playIfNeeded (scene: Scene, volume = VOLUME): void {
         const seek = consumePendingSeek(music);
 
         music.play({
-            loop: true,
+            loop: trackLoops(activeKey),
             volume,
             ...(seek !== undefined ? { seek } : {})
         });
         ignoreLiveSeek = false;
+        armEarthBloomReturn(scene, music);
     }
     else {
         // Already playing — drop stale pending seek so a later restart uses lastSeek.
