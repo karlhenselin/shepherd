@@ -4,37 +4,53 @@ import { forSpeech, voiceClipUrl } from '../audio/speechText';
 export { forSpeech, voiceClipId, voiceClipUrl } from '../audio/speechText';
 
 const PAUSE_AFTER_MS = 500;
+const SAFETY_FALLBACK_MS = 20000;
 
 let speakGeneration = 0;
 let pendingEndedTimer: number | undefined;
+let safetyTimer: number | undefined;
 let currentClip: HTMLAudioElement | null = null;
+let activeText = '';
+let activeOnEnded: (() => void) | undefined;
+let held: { text: string; onEnded?: () => void } | null = null;
 
 export function speakCue (text: string, onEnded?: () => void): void {
-    clearPendingEnded();
-    stopClip();
-    cancelBrowserSpeech();
+    haltPlayback();
     const generation = ++speakGeneration;
+    activeText = text;
+    activeOnEnded = onEnded;
 
     const finish = (): void => {
-        scheduleEnded(generation, onEnded);
+        scheduleEnded(generation, () => {
+            if (generation !== speakGeneration) {
+                return;
+            }
+
+            if (activeOnEnded === onEnded) {
+                activeText = '';
+                activeOnEnded = undefined;
+            }
+
+            onEnded?.();
+        });
     };
 
     if (text.length === 0) {
+        activeText = '';
+        activeOnEnded = undefined;
         onEnded?.();
         return;
     }
 
     if (!isSoundOn()) {
         if (onEnded) {
-            const delay = Math.max(1100, Math.min(3000, text.length * 50));
             window.setTimeout(() => {
                 if (generation !== speakGeneration) {
                     return;
                 }
 
                 finish();
-            }, delay);
-            return;
+            }, Math.max(1100, Math.min(3000, text.length * 50)));
         }
 
         return;
@@ -65,6 +81,8 @@ export function speakCue (text: string, onEnded?: () => void): void {
         speakBrowser(text, finish);
     };
 
+    armSafety(generation, finish, clip);
+
     void clip.play().catch(() => {
         if (generation !== speakGeneration) {
             return;
@@ -78,9 +96,55 @@ export function speakCue (text: string, onEnded?: () => void): void {
     });
 }
 
+/** Stop the current line but keep it so an overlay can play it again on resume. */
+export function pauseSpeech (): void {
+    if (!held && (activeText.length > 0 || activeOnEnded)) {
+        held = { text: activeText, onEnded: activeOnEnded };
+    }
+
+    activeText = '';
+    activeOnEnded = undefined;
+    haltPlayback();
+}
+
+export function resumeSpeech (): void {
+    const saved = held;
+    held = null;
+
+    if (!saved) {
+        return;
+    }
+
+    if (saved.text.length > 0) {
+        speakCue(saved.text, saved.onEnded);
+        return;
+    }
+
+    saved.onEnded?.();
+}
+
+export function speechAwaitingFinish (): boolean {
+    return held !== null
+        || activeOnEnded !== undefined
+        || currentClip !== null
+        || pendingEndedTimer !== undefined;
+}
+
 export function stopSpeech (): void {
+    activeText = '';
+    activeOnEnded = undefined;
+    haltPlayback();
+}
+
+export function clearAllSpeech (): void {
+    held = null;
+    stopSpeech();
+}
+
+function haltPlayback (): void {
     speakGeneration++;
     clearPendingEnded();
+    clearSafety();
     stopClip();
     cancelBrowserSpeech();
 }
@@ -108,6 +172,7 @@ function stopClip (): void {
 
     currentClip.onended = null;
     currentClip.onerror = null;
+    currentClip.onloadedmetadata = null;
     currentClip.pause();
     currentClip.src = '';
     currentClip = null;
@@ -119,6 +184,32 @@ function cancelBrowserSpeech (): void {
     }
 
     speechSynthesis.cancel();
+}
+
+function armSafety (generation: number, finish: () => void, clip: HTMLAudioElement): void {
+    const arm = (ms: number): void => {
+        clearSafety();
+        safetyTimer = window.setTimeout(() => {
+            safetyTimer = undefined;
+
+            if (generation !== speakGeneration) {
+                return;
+            }
+
+            finish();
+        }, ms);
+    };
+
+    arm(SAFETY_FALLBACK_MS);
+
+    clip.onloadedmetadata = () => {
+        if (generation !== speakGeneration) {
+            return;
+        }
+
+        const seconds = Number.isFinite(clip.duration) && clip.duration > 0 ? clip.duration : 12;
+        arm(Math.max(4000, seconds * 1000 + 1500));
+    };
 }
 
 function scheduleEnded (generation: number, onEnded?: () => void): void {
@@ -145,4 +236,13 @@ function clearPendingEnded (): void {
 
     window.clearTimeout(pendingEndedTimer);
     pendingEndedTimer = undefined;
+}
+
+function clearSafety (): void {
+    if (safetyTimer === undefined) {
+        return;
+    }
+
+    window.clearTimeout(safetyTimer);
+    safetyTimer = undefined;
 }

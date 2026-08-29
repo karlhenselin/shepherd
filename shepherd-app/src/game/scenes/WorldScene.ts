@@ -22,7 +22,7 @@ import { Thorns, THORN_SNARE_RADIUS, placeThorns } from '../world/Thorns';
 import { StaffPickup } from '../world/StaffPickup';
 import { BibleGem, placeBibleGems, spawnBibleGemAway } from '../world/BibleGem';
 import { watercolorWorld } from '../world/watercolorWorld';
-import { speakCue, stopSpeech } from '../ui/speech';
+import { speakCue, stopSpeech, pauseSpeech, resumeSpeech, speechAwaitingFinish, clearAllSpeech } from '../ui/speech';
 import { playGemDing, tickWalkSound } from '../audio/cues';
 import { startHowling, stopHowling, suspendHowling, syncHowling, unsuspendHowling } from '../audio/howl';
 import { isSoundOn, setSoundOn } from '../audio/soundPref';
@@ -391,13 +391,15 @@ export class WorldScene extends Scene {
         this.playWorldMusic();
         this.pettingReadyAt = this.time.now + PETTING_SUPPRESS_MS;
 
+        this.events.on(Scenes.Events.RESUME, this.onWorldResume, this);
         this.events.once(Scenes.Events.SHUTDOWN, () => {
             this.scriptId += 1;
+            this.events.off(Scenes.Events.RESUME, this.onWorldResume, this);
             this.game.events.off('blur', this.holdWorldAudio, this);
             this.game.events.off('hidden', this.holdWorldAudio, this);
             this.game.events.off('focus', this.releaseWorldAudio, this);
             this.game.events.off('visible', this.releaseWorldAudio, this);
-            stopSpeech();
+            clearAllSpeech();
             stopHowling();
             stopWorldMusic(this);
             stopSheepSounds(this);
@@ -1766,12 +1768,39 @@ export class WorldScene extends Scene {
             || this.scene.isActive('CheatScene');
     }
 
+    private onWorldResume (): void {
+        if (!this.sys.isActive()) {
+            return;
+        }
+
+        resumeSpeech();
+        this.recoverInterruptedStory();
+        this.releaseWorldAudio();
+    }
+
+    /** Overlay used to abort speakCue, leaving picnic / 1 Cor 15:51 with no onDone. */
+    private recoverInterruptedStory (): void {
+        if (speechAwaitingFinish()) {
+            return;
+        }
+
+        if (this.heardCorinthians && this.nightStarted && this.sleepVeil.alpha >= 0.75) {
+            this.scriptPlaying = false;
+            this.beginDawn();
+            return;
+        }
+
+        if (this.penTableStarted && this.picnic && !this.walkingToGate && !this.shepherd.isLyingDown) {
+            this.pauseThenSleepAtGate();
+        }
+    }
+
     private openSettings (): void {
         if (this.overlayOpen()) {
             return;
         }
 
-        stopSpeech();
+        pauseSpeech();
         this.scene.pause();
         this.scene.launch('SettingsScene');
     }
@@ -1781,7 +1810,7 @@ export class WorldScene extends Scene {
             return;
         }
 
-        stopSpeech();
+        pauseSpeech();
         this.scene.pause();
         this.scene.launch('CheatScene');
     }
@@ -1791,7 +1820,7 @@ export class WorldScene extends Scene {
             return;
         }
 
-        stopSpeech();
+        pauseSpeech();
         this.scene.pause();
         this.scene.launch('TreasureScene', {
             foundGems: [...this.foundGems],
@@ -2614,6 +2643,7 @@ export class WorldScene extends Scene {
     }
 
     private beginDawn (): void {
+        this.scriptPlaying = false;
         this.nightStarted = false;
         this.nightDarkAt = 0;
         this.nightFadeInMs = 0;
