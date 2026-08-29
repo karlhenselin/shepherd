@@ -2,7 +2,6 @@ import {
     BIBLE_GEMS,
     CORINTHIANS_15_51,
     ISAIAH_11_6,
-    ISAIAH_26_2,
     ISAIAH_53_6,
     JOHN_10,
     JOHN_14_6,
@@ -12,7 +11,6 @@ import {
     corinthians15Line,
     isaiah11LionLine,
     isaiah11WolfLine,
-    isaiah26Line,
     isaiah53Line,
     john10Line,
     john14Line,
@@ -123,10 +121,8 @@ export function allSpokenLines (): string[] {
     lines.add(isaiah53Line());
     lines.add(isaiah11WolfLine());
     lines.add(isaiah11LionLine());
-    lines.add(isaiah26Line());
     lines.add(revelation21CityLine());
     lines.add(scriptureLine(ISAIAH_11_6));
-    lines.add(scriptureLine(ISAIAH_26_2));
     lines.add(scriptureLine(REVELATION_21_2));
     lines.add(john10Line(2));
     lines.add(john10Line(9));

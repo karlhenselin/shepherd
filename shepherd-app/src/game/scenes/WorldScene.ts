@@ -28,7 +28,7 @@ import { startHowling, stopHowling, suspendHowling, syncHowling, unsuspendHowlin
 import { isSoundOn, setSoundOn } from '../audio/soundPref';
 import { WANDERLUST_KEY, WONDERS_KEY, applySavedWorldMusic, clearWorldMusicProgress, clearWorldMusicSeek, fadeInWorldMusic, fadeOutWorldMusic, getWorldMusicProgress, isWorldMusicKey, setWorldMusicTrack, startWorldMusic, stopWorldMusic } from '../audio/worldMusic';
 import { cueWaitingBleat, holdSheepSounds, playHappyBaah, playLaggingBaah, playStrayBaah, stopSheepSounds, tickNightBaahs as tickNightFlockBaahs, tickSheepSounds } from '../audio/sheepSounds';
-import { corinthians15Line, isaiah11LionLine, isaiah11WolfLine, isaiah26Line, isaiah53Line, john10Line, john14Line, psalm23Comfort, psalm23FiveTable, psalm23Half, revelation21CityLine } from '../data/scripture';
+import { corinthians15Line, isaiah11LionLine, isaiah11WolfLine, isaiah53Line, john10Line, john14Line, psalm23Comfort, psalm23FiveTable, psalm23Half, revelation21CityLine } from '../data/scripture';
 import { nextWaterVerseId, waterVerseLine } from '../data/waterVerses';
 import { nextTreeVerseId, treeVerseLine } from '../data/treeVerses';
 import { BibleGemHint } from '../ui/BibleGemHint';
@@ -566,11 +566,11 @@ export class WorldScene extends Scene {
         }
 
         this.shepherd.beginPetting(sheep.sprite.x, sheep.sprite.y);
+        playHappyBaah(this, sheep, this.shepherd.sprite);
         const hand = this.shepherd.petHandPosition();
         sheep.approachForPet(hand.x, hand.y, () => {
             this.shepherd.extendPettingFor(PET_DANCE_MS);
             sheep.beginHappyDance();
-            playHappyBaah(this, sheep, this.shepherd.sprite);
             spawnPetHeart(this, sheep.sprite.x, sheep.sprite.y);
         });
 
@@ -1886,7 +1886,7 @@ export class WorldScene extends Scene {
         }
 
         this.heardCity = true;
-        this.playLines([isaiah26Line(), revelation21CityLine()]);
+        this.playLines([revelation21CityLine()]);
     }
 
     private fold (): Sheepfold {
@@ -2950,7 +2950,7 @@ function checkpointForLine (line: string): StoryCheckpoint | null {
         return '1-cor-15-51';
     }
 
-    if (line.includes('Revelation 21:2') || line.includes('Isaiah 26:2')) {
+    if (line.includes('Revelation 21:2')) {
         return 'entered-city';
     }
 

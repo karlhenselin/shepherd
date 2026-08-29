@@ -1,6 +1,8 @@
 import { Scene, Sound } from 'phaser';
 import { Sheep } from '../entities/Sheep';
 import { isDocumentAudioLive, isSoundOn } from './soundPref';
+import { playFriendlyLionRoar } from './lionRoar';
+import { playFriendlyHowl } from './howl';
 
 export const SHEEP_BLEAT_FILES: ReadonlyArray<{ key: string; file: string }> = [
     { key: 'sheep-bleat-1', file: 'audio/sheep/210511__yuval__sheep-bleat-outdoors.mp3' },
@@ -237,8 +239,16 @@ export function playStrayBaah (scene: Scene, sheep: Sheep, listener: { x: number
     return true;
 }
 
-/** Soft happy baah when the shepherd pets a sheep. */
+/** Soft happy baah when the shepherd pets a sheep. Leo roars; Sarah howls. */
 export function playHappyBaah (scene: Scene, sheep: Sheep, listener: { x: number; y: number }): boolean {
+    if (sheep.name === 'Leo') {
+        return playFriendlyLionRoar(scene, sheep, listener);
+    }
+
+    if (sheep.name === 'Sarah') {
+        return playFriendlyHowl(scene, sheep.sprite.x, sheep.sprite.y, listener);
+    }
+
     if (sheep.peaceable) {
         return false;
     }
@@ -252,7 +262,7 @@ export function playHappyBaah (scene: Scene, sheep: Sheep, listener: { x: number
     const dist = Math.hypot(dx, dy);
     const falloff = 1 - clamp(dist / 420, 0, 1);
     const settings: Phaser.Types.Sound.SoundConfig = {
-        volume: lerp(0.08, 0.32, falloff) * (0.85 + Math.random() * 0.25),
+        volume: lerp(0.42, 0.78, falloff) * (0.9 + Math.random() * 0.16),
         pan: clamp(stereoPan(scene, sheep.sprite.x) + rand(-0.06, 0.06), -1, 1),
         rate: rand(1.05, 1.14),
         detune: rand(40, 180)

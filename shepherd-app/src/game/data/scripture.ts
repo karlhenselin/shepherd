@@ -150,15 +150,6 @@ export function isaiah11LionLine (): string {
     return `${ISAIAH_11_6.lion.text} — ${ISAIAH_11_6.lion.ref}`;
 }
 
-export const ISAIAH_26_2 = {
-    ref: 'Isaiah 26:2',
-    text: 'Open the gates that the righteous nation may enter, the nation that keeps faith.'
-} as const;
-
-export function isaiah26Line (): string {
-    return `${ISAIAH_26_2.text} — ${ISAIAH_26_2.ref}`;
-}
-
 export const REVELATION_21_2 = {
     ref: 'Revelation 21:2',
     text: 'I saw the Holy City, the new Jerusalem, coming down out of heaven from God.'
@@ -254,7 +245,6 @@ export const STORY_PASSAGES = [
     JOHN_14_6,
     JOHN_10[9],
     CORINTHIANS_15_51,
-    ISAIAH_26_2,
     REVELATION_21_2
 ] as const;
 
@@ -332,7 +322,7 @@ export function unlockedStoryPassages (flags: StoryPassageFlags): { ref: string;
     }
 
     if (flags.heardCity) {
-        unlocked.push(ISAIAH_26_2, REVELATION_21_2);
+        unlocked.push(REVELATION_21_2);
     }
 
     if (flags.foundNames?.some((name) => name === 'Wolf' || name === 'Sarah' || name === 'Leo' || name === 'Lion')) {

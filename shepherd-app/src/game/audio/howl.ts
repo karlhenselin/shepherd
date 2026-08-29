@@ -1,4 +1,4 @@
-import { Scene } from 'phaser';
+import { Scene, Sound } from 'phaser';
 import { isDocumentAudioLive, isSoundOn } from './soundPref';
 
 const HOWL_KEY = 'wolf-howl';
@@ -131,4 +131,101 @@ function cry (): void {
         rate: 1,
         detune: -16 + Math.random() * 32
     });
+}
+
+type VolumeSound = Sound.BaseSound & {
+    volume: number;
+    duration: number;
+    totalDuration: number;
+};
+
+/** Greeting howl when the shepherd pets Sarah — first half of the clip only. */
+export function playFriendlyHowl (
+    scene: Scene,
+    x: number,
+    y: number,
+    listener: { x: number; y: number }
+): boolean {
+    if (!isDocumentAudioLive() || !scene.sys.isActive() || scene.sys.isPaused()) {
+        return false;
+    }
+
+    if (scene.sound.locked || scene.sound.gameLostFocus) {
+        return false;
+    }
+
+    if (!isSoundOn()) {
+        return true;
+    }
+
+    if (!scene.cache.audio.exists(HOWL_KEY)) {
+        return false;
+    }
+
+    const ctx = scene.sound as { context?: AudioContext };
+
+    if (ctx.context instanceof AudioContext && ctx.context.state !== 'running') {
+        void ctx.context.resume();
+        return false;
+    }
+
+    const dist = Math.hypot(x - listener.x, y - listener.y);
+    const falloff = 1 - Math.min(1, Math.max(0, dist / 420));
+    const cam = scene.cameras.main;
+    const mid = cam.worldView.centerX;
+    const half = Math.max(cam.worldView.width / 2, 1);
+    const pan = Math.min(1, Math.max(-1, (x - mid) / half));
+    const rate = 1.12 + Math.random() * 0.1;
+    const startVolume = (0.48 + 0.32 * falloff) * (0.9 + Math.random() * 0.14);
+
+    const howl = scene.sound.add(HOWL_KEY, {
+        volume: startVolume,
+        pan,
+        rate,
+        detune: 20 + Math.random() * 80
+    }) as VolumeSound;
+
+    if (!howl.play()) {
+        howl.destroy();
+        return false;
+    }
+
+    const sourceSeconds = Math.max(0.4, howl.duration || howl.totalDuration || 2);
+    const playMs = (sourceSeconds / 2 / rate) * 1000;
+    const fadeMs = Math.min(160, playMs * 0.18);
+    let finished = false;
+
+    const finish = (): void => {
+        if (finished) {
+            return;
+        }
+
+        finished = true;
+        scene.tweens.killTweensOf(howl);
+
+        if (howl.isPlaying) {
+            howl.stop();
+        }
+
+        howl.destroy();
+    };
+
+    scene.time.delayedCall(Math.max(40, playMs - fadeMs), () => {
+        if (finished || !howl.isPlaying) {
+            finish();
+            return;
+        }
+
+        scene.tweens.add({
+            targets: howl,
+            volume: 0.01,
+            duration: fadeMs,
+            ease: 'Sine.easeIn',
+            onComplete: finish
+        });
+    });
+
+    howl.once('complete', finish);
+
+    return true;
 }
