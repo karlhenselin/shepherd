@@ -32,6 +32,11 @@ export class WaterSource {
     isNear (x: number, y: number): boolean {
         return Math.hypot(this.x - x, this.y - y) < this.range;
     }
+
+    /** Minimum center distance so brambles do not overlap the lake sprite. */
+    keepOutRadius (): number {
+        return Math.max(this.sprite.displayWidth, this.sprite.displayHeight) * 0.55 + 24;
+    }
 }
 
 /** Story lake plus a few extra watering holes around the map. */
