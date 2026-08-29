@@ -1,4 +1,5 @@
 import { GameObjects, Scene } from 'phaser';
+import { PASTURE_COL, PASTURE_ROW, regionCenter } from './constants';
 
 const DISPLAY_SIZE = 56;
 /** Hungry sheep peel off the trail to walk to a tuft once this close. */
@@ -57,7 +58,18 @@ export function placePasture (scene: Scene, center: { x: number; y: number }): G
         [48, 28],
         [-44, -26],
         [12, 44],
-        [-18, -48]
+        [-18, -48],
+        [72, 0],
+        [-68, 8],
+        [24, -58],
+        [-56, 38],
+        [60, 52],
+        [-24, 62],
+        [88, -32],
+        [-80, -36],
+        [0, 72],
+        [-36, 54],
+        [42, -42]
     ];
 
     for (const [dx, dy] of offsets) {
@@ -65,6 +77,35 @@ export function placePasture (scene: Scene, center: { x: number; y: number }): G
     }
 
     return patches;
+}
+
+/** Smaller grazing spots away from the story pasture. */
+function placeGrassExtras (scene: Scene): GrassPatch[] {
+    const clusters = [
+        { col: 4, row: 3, spots: [[0, 0], [34, 16], [-26, 20], [18, -28]] },
+        { col: 1, row: 5, spots: [[0, 0], [30, -14], [-24, 18]] },
+        { col: 5, row: 1, spots: [[0, 0], [-32, 22], [20, -18]] },
+        { col: 3, row: 4, spots: [[0, 0], [28, 24], [-30, -16]] }
+    ];
+    const patches: GrassPatch[] = [];
+
+    for (const cluster of clusters) {
+        const center = regionCenter(cluster.col, cluster.row);
+
+        for (const [dx, dy] of cluster.spots) {
+            patches.push(new GrassPatch(scene, center.x + dx, center.y + dy));
+        }
+    }
+
+    return patches;
+}
+
+/** Main hungry-beat pasture plus wayside tufts around the map. */
+export function placeGrass (scene: Scene): GrassPatch[] {
+    return [
+        ...placePasture(scene, regionCenter(PASTURE_COL, PASTURE_ROW)),
+        ...placeGrassExtras(scene)
+    ];
 }
 
 function ensureGrassTexture (scene: Scene): void {

@@ -15,6 +15,9 @@ export const WATER_ROW = 4;
 export const WORLD_WIDTH = REGION_COLS * REGION_WIDTH;
 export const WORLD_HEIGHT = REGION_ROWS * REGION_HEIGHT;
 
+/** Minimum spacing between spawned goals (30% of map width). */
+export const GOAL_WALK_MIN = Math.round(WORLD_WIDTH * 0.3);
+
 /**
  * Y-sort band for sheep / shepherd: above world props (~0–4), below night veil / UI (~15+).
  * depth = CHAR_DEPTH_BASE + y * CHAR_DEPTH_PER_Y  → ~5..14 across the map.

@@ -43,6 +43,9 @@ export class Sheepfold {
     readonly sprite: GameObjects.Sprite;
     private readonly glowOuter: GameObjects.Image;
     private readonly glowCore: GameObjects.Image;
+    private readonly glowOuterBaseScale: number;
+    private readonly glowCoreBaseScaleX: number;
+    private readonly glowCoreBaseScaleY: number;
 
     constructor (scene: Scene, x: number, y: number) {
         ensureSheepfoldTexture(scene);
@@ -64,6 +67,10 @@ export class Sheepfold {
         this.glowCore.setBlendMode(BlendModes.ADD);
         this.glowCore.setDepth(GLOW_DEPTH + 0.01);
         this.glowCore.setAlpha(0.30);
+
+        this.glowOuterBaseScale = this.glowOuter.scaleX;
+        this.glowCoreBaseScaleX = this.glowCore.scaleX;
+        this.glowCoreBaseScaleY = this.glowCore.scaleY;
     }
 
     get x (): number {
@@ -197,8 +204,9 @@ export class Sheepfold {
         this.glowCore.setAlpha((0.30 + night * 0.38) * flicker);
 
         const breathe = 0.97 + 0.05 * flicker;
-        this.glowOuter.setDisplaySize(GLOW_OUTER_SIZE * breathe, GLOW_OUTER_SIZE * breathe);
-        this.glowCore.setDisplaySize(GLOW_CORE_SIZE * breathe, GLOW_CORE_SIZE * (0.94 + 0.08 * flicker));
+        const coreStretch = 0.94 + 0.08 * flicker;
+        this.glowOuter.setScale(this.glowOuterBaseScale * breathe);
+        this.glowCore.setScale(this.glowCoreBaseScaleX * breathe, this.glowCoreBaseScaleY * coreStretch);
     }
 }
 
