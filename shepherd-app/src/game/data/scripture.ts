@@ -131,11 +131,11 @@ export function corinthians15Line (): string {
 
 /** Findable Bible gems from `Bible gems.md`. */
 export const BIBLE_GEMS = [
-    { id: 'john-3-16', ref: 'John 3:16', text: 'For God so loved the world…' },
+    { id: 'john-3-16', ref: 'John 3:16', text: 'For God so loved the world that He gave His one and only Son, that everyone who believes in Him shall not perish but have eternal life.' },
     { id: 'ephesians-2-8-9', ref: 'Ephesians 2:8-9', text: 'For by grace you have been saved through faith…' },
     { id: 'romans-3-23', ref: 'Romans 3:23', text: 'For all have sinned and fall short of the glory of God.' },
     { id: 'romans-6-23', ref: 'Romans 6:23', text: 'For the wages of sin is death, but the gift of God is eternal life…' },
-    { id: 'romans-10-9', ref: 'Romans 10:9', text: 'If you confess with your mouth that Jesus is Lord…' },
+    { id: 'romans-10-9', ref: 'Romans 10:9', text: 'If you confess with your mouth, "Jesus is Lord," and believe in your heart that God raised Him from the dead, you will be saved.' },
     { id: 'acts-4-12', ref: 'Acts 4:12', text: 'There is salvation in no one else…' },
     { id: 'john-14-6', ref: 'John 14:6', text: 'I am the way, and the truth, and the life…' },
     { id: '2-corinthians-5-17', ref: '2 Corinthians 5:17', text: 'If anyone is in Christ, he is a new creation…' },
@@ -145,7 +145,7 @@ export const BIBLE_GEMS = [
     { id: 'psalm-23-1', ref: 'Psalm 23:1', text: 'The LORD is my shepherd; I shall not want.' },
     { id: 'psalm-46-10', ref: 'Psalm 46:10', text: 'Be still, and know that I am God.' },
     { id: 'numbers-6-24-26', ref: 'Numbers 6:24-26', text: 'The LORD bless you and keep you…' },
-    { id: 'jeremiah-29-11', ref: 'Jeremiah 29:11', text: 'For I know the plans I have for you…' },
+    { id: 'jeremiah-29-11', ref: 'Jeremiah 29:11', text: 'For I know the plans I have for you, declares the LORD, plans to prosper you and not to harm you, to give you a future and a hope.' },
     { id: 'psalm-103-12', ref: 'Psalm 103:12', text: 'As far as the east is from the west, so far does he remove our transgressions…' },
     { id: 'philippians-4-6-7', ref: 'Philippians 4:6-7', text: 'Do not be anxious about anything…' },
     { id: 'matthew-11-28', ref: 'Matthew 11:28', text: 'Come to me, all who labor and are heavy laden…' },
@@ -154,7 +154,7 @@ export const BIBLE_GEMS = [
     { id: 'psalm-34-18', ref: 'Psalm 34:18', text: 'The LORD is near to the brokenhearted…' },
     { id: '1-peter-5-7', ref: '1 Peter 5:7', text: 'Cast all your anxieties on him, because he cares for you.' },
     { id: 'psalm-55-22', ref: 'Psalm 55:22', text: 'Cast your burden on the LORD, and he will sustain you.' },
-    { id: 'psalm-91-1-2', ref: 'Psalm 91:1-2', text: 'He who dwells in the shelter of the Most High…' },
+    { id: 'psalm-91-1-2', ref: 'Psalm 91:1-2', text: 'He who dwells in the shelter of the Most High will abide in the shadow of the Almighty. I will say to the LORD, "You are my refuge and my fortress, my God, in whom I trust."' },
     { id: 'philippians-4-13', ref: 'Philippians 4:13', text: 'I can do all things through him who strengthens me.' },
     { id: 'isaiah-40-31', ref: 'Isaiah 40:31', text: 'They who wait for the LORD shall renew their strength…' },
     { id: 'proverbs-3-5-6', ref: 'Proverbs 3:5-6', text: 'Trust in the LORD with all your heart…' },
