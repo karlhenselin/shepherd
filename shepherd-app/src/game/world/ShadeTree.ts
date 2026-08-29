@@ -2,10 +2,14 @@ import { GameObjects, Scene } from 'phaser';
 import { characterDepth, regionCenter } from './constants';
 
 const TEXTURE_KEY = 'shade-tree';
-const DISPLAY_W = 210;
-const DISPLAY_H = 280;
-const SHADE_RX = 88;
-const SHADE_RY = 48;
+const DISPLAY_W = 231;
+const DISPLAY_H = 308;
+const SHADE_RX = 132;
+const SHADE_RY = 72;
+const SHADE_COLOR = 0x0d120a;
+const SHADE_ALPHA = 0.33;
+const SHADE_Y_OFFSET = 40;
+const TRUNK_Y_OFFSET = 44;
 
 export class ShadeTree {
     readonly sprite: GameObjects.Sprite;
@@ -13,9 +17,9 @@ export class ShadeTree {
 
     constructor (scene: Scene, x: number, y: number) {
         ensureTreeTexture(scene);
-        this.shade = scene.add.ellipse(x, y + 36, SHADE_RX * 2, SHADE_RY * 2, 0x1a2412, 0.22);
+        this.shade = scene.add.ellipse(x, y + SHADE_Y_OFFSET, SHADE_RX * 2, SHADE_RY * 2, SHADE_COLOR, SHADE_ALPHA);
         this.shade.setDepth(1.6);
-        this.sprite = scene.add.sprite(x, y - 40, TEXTURE_KEY);
+        this.sprite = scene.add.sprite(x, y - TRUNK_Y_OFFSET, TEXTURE_KEY);
         this.sprite.setDisplaySize(DISPLAY_W, DISPLAY_H);
         this.sprite.setDepth(characterDepth(y));
     }
@@ -46,7 +50,14 @@ export function placeShadeTrees (scene: Scene): ShadeTree[] {
         { col: 6, row: 2, dx: -50, dy: 60 },
         { col: 2, row: 5, dx: 70, dy: -40 },
         { col: 5, row: 6, dx: -30, dy: -20 },
-        { col: 0, row: 4, dx: 90, dy: 10 }
+        { col: 0, row: 4, dx: 90, dy: 10 },
+        { col: 3, row: 1, dx: -40, dy: 50 },
+        { col: 4, row: 2, dx: 55, dy: -25 },
+        { col: 0, row: 1, dx: 75, dy: 35 },
+        { col: 3, row: 5, dx: -45, dy: 25 },
+        { col: 6, row: 4, dx: -65, dy: -35 },
+        { col: 2, row: 0, dx: 30, dy: 60 },
+        { col: 1, row: 6, dx: 50, dy: -45 }
     ];
 
     return spots.map((spot) => {
