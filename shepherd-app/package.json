@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",
+    "@capacitor/app": "^8.1.1",
     "@capacitor/core": "^8.5.0",
     "@idleflowgames/capacitor-play-games": "^0.2.1",
     "phaser": "4.0.0",

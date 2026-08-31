@@ -13,6 +13,7 @@ let currentClip: HTMLAudioElement | null = null;
 let activeText = '';
 let activeOnEnded: (() => void) | undefined;
 let held: { text: string; onEnded?: () => void } | null = null;
+let hushed = false;
 
 export function speakCue (text: string, onEnded?: () => void): void {
     haltPlayback();
@@ -21,6 +22,7 @@ export function speakCue (text: string, onEnded?: () => void): void {
     activeOnEnded = onEnded;
 
     const finish = (): void => {
+        clearSafety();
         scheduleEnded(generation, () => {
             if (generation !== speakGeneration) {
                 return;
@@ -107,6 +109,51 @@ export function pauseSpeech (): void {
     haltPlayback();
 }
 
+/** Pause the current voice clip without cancelling the line (screen lock). */
+export function hushSpeech (): void {
+    if (hushed) {
+        return;
+    }
+
+    hushed = true;
+    clearSafety();
+    currentClip?.pause();
+    cancelBrowserSpeech();
+}
+
+/** Resume a hushed voice clip, or finish the line if playback cannot restart. */
+export function unhushSpeech (): void {
+    if (!hushed) {
+        return;
+    }
+
+    hushed = false;
+
+    const clip = currentClip;
+
+    if (!clip) {
+        return;
+    }
+
+    const generation = speakGeneration;
+    const ended = clip.onended;
+    const finishHushed = (): void => {
+        if (typeof ended === 'function') {
+            ended.call(clip, new Event('ended'));
+        }
+    };
+
+    armSafety(generation, finishHushed, clip);
+
+    void clip.play().catch(() => {
+        if (generation !== speakGeneration) {
+            return;
+        }
+
+        finishHushed();
+    });
+}
+
 export function resumeSpeech (): void {
     const saved = held;
     held = null;
@@ -142,6 +189,7 @@ export function clearAllSpeech (): void {
 }
 
 function haltPlayback (): void {
+    hushed = false;
     speakGeneration++;
     clearPendingEnded();
     clearSafety();

@@ -23,7 +23,7 @@ import { StaffPickup } from '../world/StaffPickup';
 import { BibleGem, placeBibleGems, spawnBibleGemAway } from '../world/BibleGem';
 import { watercolorWorld } from '../world/watercolorWorld';
 import { clearGoldPavers, goldPaverSpotOpen, nearestGoldPaverDist, rainGoldPaver } from '../world/goldPaver';
-import { speakCue, stopSpeech, pauseSpeech, resumeSpeech, speechAwaitingFinish, clearAllSpeech } from '../ui/speech';
+import { speakCue, stopSpeech, pauseSpeech, resumeSpeech, speechAwaitingFinish, clearAllSpeech, hushSpeech, unhushSpeech } from '../ui/speech';
 import { playGemDing, tickWalkSound } from '../audio/cues';
 import { startHowling, stopHowling, suspendHowling, syncHowling, unsuspendHowling } from '../audio/howl';
 import { isSoundOn, setSoundOn } from '../audio/soundPref';
@@ -37,6 +37,7 @@ import { nextThornSnareVerseId, thornVerseLine, EZEKIEL_28_24 } from '../data/th
 import { BibleGemHint } from '../ui/BibleGemHint';
 import { LostSheepHint, isHintTargetOnScreen } from '../ui/LostSheepHint';
 import { spawnPetHeart } from '../ui/petHeart';
+import { AnalogStick } from '../ui/AnalogStick';
 import { BandageButton } from '../ui/BandageButton';
 import { SETTINGS_GEAR_KEY, SETTINGS_GEAR_SIZE, ensureSettingsGear } from '../ui/settingsGear';
 import { SOUND_ICON_SIZE, ensureSoundIcons, soundIconKey } from '../ui/soundIcon';
@@ -234,6 +235,10 @@ export class WorldScene extends Scene {
     private nightVeil!: GameObjects.Rectangle;
     private cueText!: GameObjects.Text;
     private soundToggle!: GameObjects.Image;
+    private hudSettings!: GameObjects.Image;
+    private hudChest!: GameObjects.Image;
+    private hudCheat!: GameObjects.Container;
+    private analogStick!: AnalogStick;
     private bandageButton!: BandageButton;
     private bandageRescuing = false;
     private lastCue = '';
@@ -243,8 +248,14 @@ export class WorldScene extends Scene {
     private returningToIntro = false;
     /** Gem verses waiting until the current spoken script finishes. */
     private gemVerseQueue: string[] = [];
+    /** Story lines waiting until the current spoken script finishes (do not cancel it). */
+    private scriptQueue: { lines: string[]; onDone?: () => void }[] = [];
     /** Tree verse waiting until current speech finishes (sit happens immediately). */
     private pendingTreeVerseId: string | null = null;
+    /** Kneeling under a shade tree until its verse finishes. */
+    private treeResting = false;
+    /** Finish the current shade sit before darkening the world. */
+    private nightAfterTree = false;
     private strayReadyAt = 0;
     private lagWarned = new WeakSet<Sheep>();
     private lostHint!: LostSheepHint;
@@ -290,6 +301,7 @@ export class WorldScene extends Scene {
     create (data?: { fromIntro?: boolean }): void {
         this.resetRun();
         this.cameras.main.setBackgroundColor(0xf7f3ea);
+        this.input.addPointer(3);
 
         if (data?.fromIntro) {
             this.cameras.main.fadeIn(1200, 255, 255, 255);
@@ -348,7 +360,7 @@ export class WorldScene extends Scene {
             color: '#3d2c1e',
             backgroundColor: '#f3ead8cc',
             padding: { x: 10, y: 6 },
-            wordWrap: { width: 720 }
+            wordWrap: { width: Math.max(200, this.scale.width - 220) }
         }).setScrollFactor(0).setDepth(20);
 
         this.addSettingsButton();
@@ -368,6 +380,9 @@ export class WorldScene extends Scene {
         this.lostHint = new LostSheepHint(this);
         this.gemHint = new BibleGemHint(this);
         this.addBandageButton();
+        this.analogStick = new AnalogStick(this, (x, y) => this.shepherd.setMoveStick(x, y));
+        this.layoutChrome();
+        this.scale.on('resize', this.layoutChrome, this);
 
         if (save) {
             this.foundGems = save.foundGems ?? [];
@@ -421,6 +436,8 @@ export class WorldScene extends Scene {
             this.game.events.off('hidden', this.holdWorldAudio, this);
             this.game.events.off('focus', this.releaseWorldAudio, this);
             this.game.events.off('visible', this.releaseWorldAudio, this);
+            this.scale.off('resize', this.layoutChrome, this);
+            this.analogStick?.destroy();
             clearAllSpeech();
             stopHowling();
             stopWorldMusic(this);
@@ -459,7 +476,7 @@ export class WorldScene extends Scene {
 
         const flockKeepOuts = this.flockKeepOuts(keepOuts);
 
-        for (const sheep of this.flock) {
+        for (const sheep of this.flock.slice()) {
             // Hold followers at spawn until the shepherd moves (restore ring / dawn gather).
             if (this.loadPetsLocked && sheep.mood === 'following') {
                 continue;
@@ -710,7 +727,7 @@ export class WorldScene extends Scene {
         }
 
         this.heardPsalm2 = true;
-        this.playLines([
+        this.continueLines([
             psalm23Half(2, 'a'),
             isaiah53Line()
         ], () => {
@@ -756,6 +773,27 @@ export class WorldScene extends Scene {
         this.speakLines(id, lines, onDone);
     }
 
+    /** Play now, or after the current script, without cancelling that script's onDone. */
+    private continueLines (lines: string[], onDone?: () => void): void {
+        if (this.scriptPlaying) {
+            this.scriptQueue.push({ lines, onDone });
+            return;
+        }
+
+        this.playLines(lines, onDone);
+    }
+
+    private flushScriptQueue (): boolean {
+        const next = this.scriptQueue.shift();
+
+        if (!next) {
+            return false;
+        }
+
+        this.playLines(next.lines, next.onDone);
+        return true;
+    }
+
     private speakLines (id: number, lines: string[], onDone?: () => void): void {
         if (id !== this.scriptId) {
             return;
@@ -776,6 +814,10 @@ export class WorldScene extends Scene {
             }
 
             if (this.flushPendingTreeVerse()) {
+                return;
+            }
+
+            if (this.flushScriptQueue()) {
                 return;
             }
 
@@ -811,7 +853,7 @@ export class WorldScene extends Scene {
             sheep.hungry = true;
         }
 
-        const lines = ['The sheep are hungry.'];
+        const lines = [this.hungryCue()];
 
         if (!this.heardPsalm1b) {
             lines.push(psalm23Half(1, 'b'));
@@ -828,6 +870,16 @@ export class WorldScene extends Scene {
 
             sheep.thirsty = true;
         }
+    }
+
+    private hungryCue (): string {
+        const hungry = this.flock.filter((sheep) => sheep.hungry && sheep.mood !== 'waiting');
+
+        if (hungry.length === 1) {
+            return `${hungry[0].name} is hungry.`;
+        }
+
+        return 'The sheep are hungry.';
     }
 
     private flockCue (): string {
@@ -872,7 +924,7 @@ export class WorldScene extends Scene {
         }
 
         if (this.flock.some((sheep) => sheep.hungry) && !this.heardCorinthians) {
-            return 'The sheep are hungry.';
+            return this.hungryCue();
         }
 
         if (this.flock.some((sheep) => sheep.thirsty) && !this.heardCorinthians) {
@@ -953,7 +1005,8 @@ export class WorldScene extends Scene {
 
         const spots: { x: number; y: number }[] = [];
 
-        if (nextTreeVerseId(this.foundTreeVerses, this.shepherd.wearsWhite)) {
+        if (!this.nightStarted && !this.nightAfterTree
+            && nextTreeVerseId(this.foundTreeVerses, this.shepherd.wearsWhite)) {
             spots.push(...this.trees);
         }
 
@@ -1031,6 +1084,8 @@ export class WorldScene extends Scene {
         }).setOrigin(0.5).setScrollFactor(0).setDepth(25).setAlpha(0.85);
 
         speakCue(WELL_DONE_LINE);
+
+        this.analogStick?.setVisible(false);
 
         this.addWellDoneChest(cx, height / 2 + 16);
         this.addWellDoneButton(cx, height / 2 + 80, 'Achievements', () => this.openAchievements());
@@ -1160,7 +1215,17 @@ export class WorldScene extends Scene {
         this.lastCue = text;
     }
 
+    private hasLostSheep (): boolean {
+        return this.flock.some((sheep) =>
+            (sheep.mood === 'waiting' || sheep.hurt) && !sheep.discovered
+        );
+    }
+
     private spawnNextSheep (): void {
+        if (this.hasLostSheep()) {
+            return;
+        }
+
         const name = this.nextNames.shift();
 
         if (!name) {
@@ -1435,6 +1500,8 @@ export class WorldScene extends Scene {
         this.drinkCuePlayed = false;
         this.drinkGatherAt = 0;
         this.treeVisit = null;
+        this.treeResting = false;
+        this.nightAfterTree = false;
         this.lastGoldStone = null;
         clearGoldPavers(this);
         this.lastCue = '';
@@ -1442,6 +1509,7 @@ export class WorldScene extends Scene {
         this.wellDoneStarted = false;
         this.returningToIntro = false;
         this.gemVerseQueue = [];
+        this.scriptQueue = [];
         this.pendingTreeVerseId = null;
         this.nextNames = FLOCK_NAMES.slice(1);
         this.foundCount = 0;
@@ -1564,6 +1632,34 @@ export class WorldScene extends Scene {
             event.stopPropagation();
             this.openCheat();
         });
+    }
+
+    private layoutChrome (): void {
+        const { width, height } = this.scale;
+        this.nightVeil?.setSize(width, height);
+        this.sleepVeil?.setSize(width, height);
+        this.hudSettings?.setPosition(width - 16, 16);
+
+        if (this.soundToggle && this.hudSettings) {
+            this.soundToggle.setPosition(this.hudSettings.x - this.hudSettings.displayWidth - 12, 16);
+        }
+
+        if (this.hudChest && this.soundToggle) {
+            this.hudChest.setPosition(this.soundToggle.x - this.soundToggle.displayWidth - 12, 16);
+        }
+
+        if (this.hudCheat && this.hudChest) {
+            this.hudCheat.setPosition(this.hudChest.x - this.hudChest.displayWidth - 12, 22);
+        }
+
+        this.cueText?.setStyle({ wordWrap: { width: this.cueWrapWidth() } });
+        this.bandageButton?.layout();
+        this.analogStick?.layout();
+        this.analogStick?.setVisible(!this.wellDoneStarted);
+    }
+
+    private cueWrapWidth (): number {
+        return Math.max(200, this.scale.width - 220);
     }
 
     private toggleSound (): void {
@@ -2006,6 +2102,8 @@ export class WorldScene extends Scene {
     private holdWorldAudio (): void {
         suspendHowling();
         holdSheepSounds(this);
+        stopWorldMusic(this);
+        hushSpeech();
     }
 
     private releaseWorldAudio (): void {
@@ -2013,6 +2111,7 @@ export class WorldScene extends Scene {
             return;
         }
 
+        unhushSpeech();
         this.playWorldMusic();
         unsuspendHowling();
     }
@@ -2043,6 +2142,20 @@ export class WorldScene extends Scene {
     private recoverInterruptedStory (): void {
         if (speechAwaitingFinish()) {
             return;
+        }
+
+        if (this.heardPsalm2 && this.foundCount < 2) {
+            this.spawnNextSheep();
+        }
+
+        if (this.scriptPlaying) {
+            this.scriptPlaying = false;
+
+            if (this.flushScriptQueue()) {
+                return;
+            }
+
+            this.showCue(this.flockCue(), false);
         }
 
         if (this.heardCorinthians && this.nightStarted && this.sleepVeil.alpha >= 0.75) {
@@ -2116,6 +2229,11 @@ export class WorldScene extends Scene {
             return;
         }
 
+        if (this.deferNightForTree()) {
+            return;
+        }
+
+        this.nightAfterTree = false;
         this.applyNight(true);
         this.playLines([
             'Night is falling.',
@@ -2123,6 +2241,34 @@ export class WorldScene extends Scene {
         ], () => {
             this.beginStaffBeat();
         });
+    }
+
+    /** If the shepherd is in a shade sit (or can start one), finish that before night. */
+    private deferNightForTree (): boolean {
+        if (this.treeResting || this.pendingTreeVerseId) {
+            this.nightAfterTree = true;
+
+            if (this.pendingTreeVerseId && !this.scriptPlaying) {
+                this.flushPendingTreeVerse();
+            }
+
+            return true;
+        }
+
+        const tree = this.trees.find((item) =>
+            item.inShade(this.shepherd.sprite.x, this.shepherd.sprite.y)
+        );
+        const verseId = tree
+            ? nextTreeVerseId(this.foundTreeVerses, this.shepherd.wearsWhite)
+            : null;
+
+        if (!tree || !verseId || this.treeRestOnCooldown()) {
+            return false;
+        }
+
+        this.nightAfterTree = true;
+        this.startShadeTreeRest(tree, verseId);
+        return true;
     }
 
     private beginStaffBeat (): void {
@@ -3100,7 +3246,7 @@ export class WorldScene extends Scene {
                 backgroundColor: '#00000000',
                 align: 'center',
                 padding: { x: 0, y: 0 },
-                wordWrap: { width: Math.min(640, width - 80) }
+                wordWrap: { width: Math.min(640, this.scale.width - 80) }
             })
             .setPosition(width / 2, height / 2 - 24)
             .setOrigin(0.5);
@@ -3115,7 +3261,7 @@ export class WorldScene extends Scene {
                 backgroundColor: '#f3ead8cc',
                 align: 'left',
                 padding: { x: 10, y: 6 },
-                wordWrap: { width: 720 }
+                wordWrap: { width: this.cueWrapWidth() }
             })
             .setPosition(16, 16)
             .setOrigin(0, 0);

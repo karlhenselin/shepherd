@@ -1,5 +1,12 @@
 const STORAGE_KEY = 'shepherd-sound';
 
+/** True while the app is backgrounded / screen is locked. */
+let backgroundHold = false;
+
+export function setBackgroundAudioHold (on: boolean): void {
+    backgroundHold = on;
+}
+
 export function isSoundOn (): boolean {
     try {
         return localStorage.getItem(STORAGE_KEY) !== 'off';
@@ -19,6 +26,10 @@ export function isDocumentAudioLive (): boolean {
     }
 
     if (document.hidden) {
+        return false;
+    }
+
+    if (backgroundHold) {
         return false;
     }
 

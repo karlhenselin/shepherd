@@ -6,6 +6,7 @@ const SIZE = 320;
 const DISPLAY = 240;
 
 export class BandageButton {
+    private readonly scene: Scene;
     private readonly icon: GameObjects.Image;
     private readonly pulse: Tweens.Tween;
     private readonly baseScale: number;
@@ -13,11 +14,9 @@ export class BandageButton {
 
     constructor (scene: Scene, onPress: () => void) {
         ensureTexture(scene);
+        this.scene = scene;
 
-        const cx = scene.scale.width / 2;
-        const cy = scene.scale.height / 2 + 8;
-
-        this.icon = scene.add.image(cx, cy, TEXTURE_KEY);
+        this.icon = scene.add.image(scene.scale.width / 2, scene.scale.height / 2 + 8, TEXTURE_KEY);
         this.icon.setDisplaySize(DISPLAY, DISPLAY);
         this.icon.setScrollFactor(0);
         this.icon.setDepth(22);
@@ -74,6 +73,10 @@ export class BandageButton {
         this.pulse.pause();
         this.icon.setScale(this.baseScale);
         this.icon.clearTint();
+    }
+
+    layout (): void {
+        this.icon.setPosition(this.scene.scale.width / 2, this.scene.scale.height / 2 + 8);
     }
 }
 

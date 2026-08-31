@@ -1,5 +1,5 @@
 import { Boot } from './scenes/Boot';
-import { AUTO, Game } from 'phaser';
+import { AUTO, Game, Scale } from 'phaser';
 import { IntroScene } from './scenes/IntroScene';
 import { Preloader } from './scenes/Preloader';
 import { CheatScene } from './scenes/CheatScene';
@@ -7,6 +7,7 @@ import { SettingsScene } from './scenes/SettingsScene';
 import { TreasureScene } from './scenes/TreasureScene';
 import { AchievementsScene } from './scenes/AchievementsScene';
 import { WorldScene } from './scenes/WorldScene';
+import { installAudioFocus } from './audio/audioFocus';
 
 const config: Phaser.Types.Core.GameConfig = {
     type: AUTO,
@@ -14,6 +15,10 @@ const config: Phaser.Types.Core.GameConfig = {
     height: 768,
     parent: 'game-container',
     backgroundColor: '#000000',
+    scale: {
+        mode: Scale.RESIZE,
+        autoCenter: Scale.CENTER_BOTH
+    },
     physics: {
         default: 'arcade',
         arcade: {
@@ -33,9 +38,9 @@ const config: Phaser.Types.Core.GameConfig = {
 };
 
 const StartGame = (parent: string) => {
-
-    return new Game({ ...config, parent });
-
+    const game = new Game({ ...config, parent });
+    installAudioFocus(game);
+    return game;
 }
 
 export default StartGame;

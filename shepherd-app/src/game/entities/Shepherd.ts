@@ -28,6 +28,8 @@ export class Shepherd {
     private moveDirX = 1;
     private moveDirY = 0;
     private keepOuts: KeepOutZone[] = [];
+    private stickX = 0;
+    private stickY = 0;
 
     constructor (scene: Scene, x: number, y: number) {
         ensureShepherdTextures(scene);
@@ -57,6 +59,16 @@ export class Shepherd {
 
             this.target = this.clampToKeepOuts(pointer.worldX, pointer.worldY);
         });
+    }
+
+    /** Analog stick, -1..1. Zeroed when released. */
+    setMoveStick (x: number, y: number): void {
+        this.stickX = x;
+        this.stickY = y;
+
+        if (Math.hypot(x, y) > 0.12) {
+            this.target = null;
+        }
     }
 
     get hasStaff (): boolean {
@@ -288,6 +300,19 @@ export class Shepherd {
         }
 
         if (!this.guided) {
+            const stick = Math.hypot(this.stickX, this.stickY);
+
+            if (stick > 0.12) {
+                const speed = SPEED * Math.min(1, stick);
+                this.target = null;
+                this.body.setVelocity(this.stickX, this.stickY);
+                this.body.velocity.normalize().scale(speed);
+                this.faceVelocity();
+                this.applyKeepOutPush();
+                this.placeShadow();
+                return;
+            }
+
             const left = this.keys.A?.isDown ? -1 : 0;
             const right = this.keys.D?.isDown ? 1 : 0;
             const up = this.keys.W?.isDown ? -1 : 0;

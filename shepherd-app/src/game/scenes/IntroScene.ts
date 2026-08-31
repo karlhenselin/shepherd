@@ -45,6 +45,9 @@ export class IntroScene extends Scene {
             .setDepth(5)
             .setScrollFactor(0);
 
+        this.scale.on('resize', this.layoutIntro, this);
+        this.events.once('shutdown', () => this.scale.off('resize', this.layoutIntro, this));
+
         this.input.on('pointerdown', () => {
             if (this.sound.locked) {
                 return;
@@ -54,6 +57,16 @@ export class IntroScene extends Scene {
         });
 
         void this.play();
+    }
+
+    private layoutIntro (): void {
+        const { width, height } = this.scale;
+        const cx = width / 2;
+        const cy = height / 2;
+        this.line.setPosition(cx, cy - 24);
+        this.citation.setPosition(cx, cy + 36);
+        this.wipe.setPosition(cx, cy);
+        this.wipe.setSize(width, 2);
     }
 
     private async play (): Promise<void> {
