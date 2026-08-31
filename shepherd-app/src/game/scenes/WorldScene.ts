@@ -1,4 +1,4 @@
-import { Scene, GameObjects, Scenes } from 'phaser';
+import { Scene, GameObjects, Geom, Scenes } from 'phaser';
 import { Shepherd } from '../entities/Shepherd';
 import { Wolf, WOLF_ATTACK_RANGE } from '../entities/Wolf';
 import { Lion } from '../entities/Lion';
@@ -30,7 +30,7 @@ import { isSoundOn, setSoundOn } from '../audio/soundPref';
 import { WANDERLUST_KEY, WONDERS_KEY, EARTH_IN_BLOOM_KEY, applySavedWorldMusic, clearWorldMusicProgress, clearWorldMusicSeek, fadeInWorldMusic, fadeOutWorldMusic, getActiveWorldMusicKey, getWorldMusicProgress, isWorldMusicKey, setWorldMusicTrack, startWorldMusic, stopWorldMusic } from '../audio/worldMusic';
 import { cueWaitingBleat, holdSheepSounds, playHappyBaah, playLaggingBaah, playStrayBaah, stopSheepSounds, tickNightBaahs as tickNightFlockBaahs, tickSheepSounds } from '../audio/sheepSounds';
 import { WELL_DONE_LINE } from '../audio/spokenLines';
-import { corinthians15Line, isaiah11LionLine, isaiah11WolfLine, isaiah53Line, john10Line, john14Line, psalm23Comfort, psalm23FiveTable, psalm23Half, revelation21CityLine } from '../data/scripture';
+import { corinthians15Line, isaiah11LionLine, isaiah11WolfLine, isaiah53Line, john10Line, john14Line, MATTHEW_25_23, psalm23Comfort, psalm23FiveTable, psalm23Half, revelation21CityLine } from '../data/scripture';
 import { nextWaterVerseId, waterVerseLine } from '../data/waterVerses';
 import { nextTreeVerseId, treeVerseLine } from '../data/treeVerses';
 import { nextThornSnareVerseId, thornVerseLine, EZEKIEL_28_24 } from '../data/thornVerses';
@@ -989,9 +989,12 @@ export class WorldScene extends Scene {
         this.wellDoneStarted = true;
         this.scriptId += 1;
         this.scriptPlaying = true;
+        this.saveProgress(this.lastCheckpoint ?? 'found-gem');
         fadeOutWorldMusic(this, 1600);
         holdSheepSounds(this);
         stopHowling();
+        this.sleepVeil.setDepth(23);
+        this.sleepVeil.setInteractive();
 
         this.tweens.add({
             targets: this.sleepVeil,
@@ -1003,19 +1006,121 @@ export class WorldScene extends Scene {
                     return;
                 }
 
-                const { width, height } = this.scale;
-                this.add.text(width / 2, height / 2, WELL_DONE_LINE, {
-                    fontFamily: 'Georgia, Palatino, serif',
-                    fontSize: '36px',
-                    color: '#f4ead8',
-                    align: 'center',
-                    wordWrap: { width: width - 80 }
-                }).setOrigin(0.5).setScrollFactor(0).setDepth(25);
-
-                speakCue(WELL_DONE_LINE, () => this.returnToIntro());
-                this.time.delayedCall(14000, () => this.returnToIntro());
+                this.showWellDoneMenu();
             }
         });
+    }
+
+    private showWellDoneMenu (): void {
+        const { width, height } = this.scale;
+        const cx = width / 2;
+
+        this.add.text(cx, height / 2 - 132, MATTHEW_25_23.text, {
+            fontFamily: 'Georgia, Palatino, serif',
+            fontSize: '36px',
+            color: '#f4ead8',
+            align: 'center',
+            wordWrap: { width: width - 80 }
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(25);
+
+        this.add.text(cx, height / 2 - 78, `— ${MATTHEW_25_23.ref}`, {
+            fontFamily: 'Georgia, Palatino, serif',
+            fontSize: '18px',
+            color: '#f4ead8',
+            align: 'center'
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(25).setAlpha(0.85);
+
+        speakCue(WELL_DONE_LINE);
+
+        this.addWellDoneChest(cx, height / 2 + 16);
+        this.addWellDoneButton(cx, height / 2 + 80, 'Achievements', () => this.openAchievements());
+        this.addWellDoneButton(cx, height / 2 + 144, 'Restart', () => this.returnToIntro());
+    }
+
+    private addWellDoneChest (x: number, y: number): void {
+        ensureTreasureChest(this);
+
+        const iconSize = 28;
+        const gap = 8;
+        const padX = 22;
+        const padY = 10;
+        const umber = '#3d2c1e';
+        const hover = '#5c4634';
+
+        const label = this.add.text(0, 0, 'Treasure chest', {
+            fontFamily: 'Georgia, Palatino, serif',
+            fontSize: '22px',
+            color: umber
+        }).setOrigin(0, 0.5);
+
+        const icon = this.add.image(0, 0, TREASURE_CHEST_KEY)
+            .setDisplaySize(iconSize, iconSize)
+            .setOrigin(0, 0.5);
+
+        const innerW = iconSize + gap + label.width;
+        const innerH = Math.max(iconSize, label.height);
+        const boxW = innerW + padX * 2;
+        const boxH = innerH + padY * 2;
+        const bg = this.add.rectangle(0, 0, boxW, boxH, 0xf3ead8).setOrigin(0.5);
+
+        icon.setPosition(-innerW / 2, 0);
+        label.setPosition(-innerW / 2 + iconSize + gap, 0);
+
+        const box = this.add.container(x, y, [bg, icon, label])
+            .setScrollFactor(0)
+            .setDepth(26)
+            .setInteractive({
+                hitArea: new Geom.Rectangle(-boxW / 2, -boxH / 2, boxW, boxH),
+                hitAreaCallback: Geom.Rectangle.Contains,
+                useHandCursor: true
+            });
+
+        box.setData('ui', true);
+        box.on('pointerover', () => {
+            label.setColor(hover);
+            icon.setTint(0xc4a882);
+        });
+        box.on('pointerout', () => {
+            label.setColor(umber);
+            icon.clearTint();
+        });
+        box.on('pointerdown', (_pointer: unknown, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
+            event.stopPropagation();
+            this.openTreasure();
+        });
+    }
+
+    private addWellDoneButton (x: number, y: number, label: string, onClick: () => void): void {
+        const button = this.add.text(x, y, label, {
+            fontFamily: 'Georgia, Palatino, serif',
+            fontSize: '22px',
+            color: '#3d2c1e',
+            backgroundColor: '#f3ead8',
+            padding: { x: 22, y: 10 },
+            align: 'center'
+        })
+            .setOrigin(0.5)
+            .setScrollFactor(0)
+            .setDepth(26)
+            .setInteractive({ useHandCursor: true });
+
+        button.setData('ui', true);
+        button.on('pointerover', () => button.setColor('#5c4634'));
+        button.on('pointerout', () => button.setColor('#3d2c1e'));
+        button.on('pointerdown', (_pointer: unknown, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
+            event.stopPropagation();
+            onClick();
+        });
+    }
+
+    private openAchievements (): void {
+        if (this.overlayOpen()) {
+            return;
+        }
+
+        pauseSpeech();
+        this.scene.pause();
+        this.scene.launch('AchievementsScene');
     }
 
     private returnToIntro (): void {
@@ -1192,8 +1297,10 @@ export class WorldScene extends Scene {
         this.heardJohn109 = save.heardJohn109 === true;
         this.heardCorinthians = save.heardCorinthians === true;
         this.heardCity = save.heardCity === true;
+        this.foundGems = save.foundGems ?? this.foundGems;
         this.foundWaterVerses = save.foundWaterVerses ?? this.foundWaterVerses;
         this.foundTreeVerses = save.foundTreeVerses ?? this.foundTreeVerses;
+        this.foundThornVerses = save.foundThornVerses ?? this.foundThornVerses;
 
         if (save.foundNames.length > 0) {
             this.loadPetsLocked = true;
@@ -1277,7 +1384,10 @@ export class WorldScene extends Scene {
         if (this.heardJohn109 && this.heardCorinthians) {
             this.placeAtFoldAwake();
 
-            if (save.checkpoint === 'enter-city' && save.player && !this.heardCity) {
+            if (
+                save.player
+                && (save.checkpoint === 'enter-city' || save.checkpoint === 'entered-city')
+            ) {
                 this.placePartyAt(save.player.x, save.player.y);
             }
         }
@@ -1910,6 +2020,7 @@ export class WorldScene extends Scene {
     private overlayOpen (): boolean {
         return this.scene.isActive('SettingsScene')
             || this.scene.isActive('TreasureScene')
+            || this.scene.isActive('AchievementsScene')
             || this.scene.isActive('CheatScene');
     }
 
@@ -1919,6 +2030,11 @@ export class WorldScene extends Scene {
         }
 
         resumeSpeech();
+
+        if (this.wellDoneStarted) {
+            return;
+        }
+
         this.recoverInterruptedStory();
         this.releaseWorldAudio();
     }

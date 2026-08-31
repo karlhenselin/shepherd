@@ -1,10 +1,10 @@
 import { mkdir, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, statSync, unlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { allSpokenLines } from '../src/game/audio/spokenLines.ts';
-import { forSpeech, voiceClipId } from '../src/game/audio/speechText.ts';
+import { forPronunciation, forSpeech, voiceClipId } from '../src/game/audio/speechText.ts';
 
 const VOICE = 'en-US-AndrewNeural';
 const RATE = '-8%';
@@ -33,7 +33,7 @@ async function main (): Promise<void> {
         jobs.push({ id, spoken, path: join(outDir, `${id}.mp3`) });
     }
 
-    const pending = jobs.filter((job) => !existsSync(job.path));
+    const pending = jobs.filter((job) => !existsSync(job.path) || statSync(job.path).size === 0);
 
     console.log(`${jobs.length} lines, ${pending.length} to generate, ${jobs.length - pending.length} already on disk.`);
 
@@ -50,7 +50,7 @@ async function main (): Promise<void> {
             }
 
             try {
-                await synthesize(job.spoken, job.path);
+                await synthesize(forPronunciation(job.spoken), job.path);
                 done += 1;
                 console.log(`[${done}/${pending.length}] ${job.id}`);
             }
@@ -82,9 +82,13 @@ function synthesize (text: string, dest: string): Promise<void> {
         });
         child.on('error', reject);
         child.on('close', (code) => {
-            if (code === 0 && existsSync(dest)) {
+            if (code === 0 && existsSync(dest) && statSync(dest).size > 0) {
                 resolve();
                 return;
+            }
+
+            if (existsSync(dest) && statSync(dest).size === 0) {
+                unlinkSync(dest);
             }
 
             reject(new Error(err.trim() || `edge-tts exited ${code}`));

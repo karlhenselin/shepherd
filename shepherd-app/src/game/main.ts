@@ -5,6 +5,7 @@ import { Preloader } from './scenes/Preloader';
 import { CheatScene } from './scenes/CheatScene';
 import { SettingsScene } from './scenes/SettingsScene';
 import { TreasureScene } from './scenes/TreasureScene';
+import { AchievementsScene } from './scenes/AchievementsScene';
 import { WorldScene } from './scenes/WorldScene';
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -26,6 +27,7 @@ const config: Phaser.Types.Core.GameConfig = {
         WorldScene,
         SettingsScene,
         TreasureScene,
+        AchievementsScene,
         CheatScene
     ]
 };

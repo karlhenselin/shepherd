@@ -1,5 +1,5 @@
 import { isSoundOn } from '../audio/soundPref';
-import { forSpeech, voiceClipUrl } from '../audio/speechText';
+import { forPronunciation, forSpeech, voiceClipUrl } from '../audio/speechText';
 
 export { forSpeech, voiceClipId, voiceClipUrl } from '../audio/speechText';
 
@@ -157,7 +157,7 @@ function speakBrowser (text: string, finish: () => void): void {
 
     speechSynthesis.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(forSpeech(text));
+    const utterance = new SpeechSynthesisUtterance(forPronunciation(forSpeech(text)));
     utterance.rate = 0.95;
     utterance.pitch = 1;
     utterance.onend = () => finish();

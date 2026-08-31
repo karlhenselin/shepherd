@@ -5,6 +5,7 @@ import {
     ISAIAH_53_6,
     JOHN_10,
     JOHN_14_6,
+    MATTHEW_25_23,
     PSALM_23,
     REVELATION_21_2,
     bibleGemLine,
@@ -26,7 +27,7 @@ import { THORN_VERSES, thornVerseLine } from '../data/thornVerses';
 
 const SHEEP_NAMES = ['Clover', 'Snowball', 'Milo', 'Biscuit', 'Sarah', 'Leo'] as const;
 
-export const WELL_DONE_LINE = 'Well done, good and faithful servant.';
+export const WELL_DONE_LINE = scriptureLine(MATTHEW_25_23);
 
 const STATIC_LINES = [
     'In the beginning',
@@ -80,7 +81,7 @@ const STATIC_LINES = [
     'Easy, Sarah.',
     'Come here, Sarah.',
     'Sweet Sarah.',
-    'Well done, good and faithful servant.'
+    WELL_DONE_LINE
 ] as const;
 
 const NAMED_TEMPLATES: Array<(name: string) => string> = [

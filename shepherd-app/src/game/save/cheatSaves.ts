@@ -1,3 +1,6 @@
+import { BIBLE_GEMS } from '../data/scripture';
+import { TREE_VERSES } from '../data/treeVerses';
+import { WATER_VERSES } from '../data/waterVerses';
 import { defaultCitySpot, farthestCornerFrom, PASTURE_COL, PASTURE_ROW, regionCenter, startCenter, WATER_COL, WATER_ROW } from '../world/constants';
 import { CITY_APPROACH_Y } from '../world/Jerusalem';
 import { GameSave, StoryCheckpoint } from './gameSave';
@@ -30,7 +33,10 @@ export const CHEAT_SPOTS: CheatSpot[] = [
     { label: '1 Corinthians 15:51 — changed', save: corinthians() },
     { label: 'Find the lion', save: findLion() },
     { label: 'Find the wolf', save: findWolf() },
-    { label: 'Enter the city', save: enterCity() }
+    { label: 'Enter the city', save: enterCity() },
+    { label: 'Found all Bible gems', save: foundAllGems() },
+    { label: 'Found all water', save: foundAllWater() },
+    { label: 'All but one tree passage', save: allButOneTree() }
 ];
 
 function blank (checkpoint: StoryCheckpoint, extra: Partial<GameSave> = {}): GameSave {
@@ -261,5 +267,47 @@ function enterCity (): GameSave {
         waitingName: null,
         nextNames: [],
         player: { x: city.x, y: city.y + CITY_APPROACH_Y }
+    });
+}
+
+function foundAllGems (): GameSave {
+    return afterCity({
+        foundGems: allGemIds()
+    });
+}
+
+function foundAllWater (): GameSave {
+    return afterCity({
+        foundWaterVerses: allWaterIds()
+    });
+}
+
+function allButOneTree (): GameSave {
+    return afterCity({
+        foundGems: allGemIds(),
+        foundWaterVerses: allWaterIds(),
+        foundTreeVerses: TREE_VERSES.slice(0, -1).map((verse) => verse.id)
+    });
+}
+
+function allGemIds (): string[] {
+    return BIBLE_GEMS.map((gem) => gem.id);
+}
+
+function allWaterIds (): string[] {
+    return WATER_VERSES.map((verse) => verse.id);
+}
+
+function afterCity (extra: Partial<GameSave> = {}): GameSave {
+    const city = defaultCitySpot();
+
+    return afterChange('entered-city', {
+        foundCount: 6,
+        foundNames: [...FLOCK, 'Leo', 'Sarah'],
+        waitingName: null,
+        nextNames: [],
+        heardCity: true,
+        player: { x: city.x, y: city.y + CITY_APPROACH_Y },
+        ...extra
     });
 }

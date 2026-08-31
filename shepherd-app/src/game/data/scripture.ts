@@ -159,6 +159,11 @@ export function revelation21CityLine (): string {
     return `${REVELATION_21_2.text} — ${REVELATION_21_2.ref}`;
 }
 
+export const MATTHEW_25_23 = {
+    ref: 'Matthew 25:23',
+    text: 'Well done, good and faithful servant.'
+} as const;
+
 /** Findable Bible gems from `Bible gems.md`. */
 export const BIBLE_GEMS = [
     { id: 'john-3-16', ref: 'John 3:16', text: 'For God so loved the world that He gave His one and only Son, that everyone who believes in Him shall not perish but have eternal life.' },

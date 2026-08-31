@@ -7,6 +7,17 @@ export function forSpeech (text: string): string {
         .replace(/(\d+):(\d+[a-z]?)/gi, '$1 verse $2');
 }
 
+/**
+ * Homograph hints for synthesizers. Does not change clip ids or on-screen text.
+ * Leviticus 26:4 "produce" is the food noun (PRO-duce), not the verb (pro-DUCE).
+ * "Job" the book is Jobe (long O), not job-the-work (short o).
+ */
+export function forPronunciation (spoken: string): string {
+    return spoken
+        .replace(/\byield its produce\b/g, 'yield its PROduce')
+        .replace(/\bJob (\d)/g, 'Jobe $1');
+}
+
 /** Stable 8-char id from the spoken form of a cue. */
 export function voiceClipId (text: string): string {
     const spoken = forSpeech(text);
