@@ -2,6 +2,7 @@ import { Scene } from 'phaser';
 import { loadHowlSounds } from '../audio/howl';
 import { loadCueSounds } from '../audio/cues';
 import { loadSheepSounds } from '../audio/sheepSounds';
+import { prepareThornArt } from '../world/Thorns';
 
 export class Preloader extends Scene
 {
@@ -60,6 +61,7 @@ export class Preloader extends Scene
         knockOutNearBlack(this, 'lion');
         knockOutNearBlack(this, 'jerusalem');
         knockOutNearBlack(this, 'thorns-roses');
+        prepareThornArt(this);
         trimTransparentPadding(this, 'wolf');
         trimTransparentPadding(this, 'lion');
         this.scene.start('IntroScene');

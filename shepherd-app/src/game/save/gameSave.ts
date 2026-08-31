@@ -36,6 +36,7 @@ export type GameSave = {
     foundGems?: string[];
     foundWaterVerses?: string[];
     foundTreeVerses?: string[];
+    foundThornVerses?: string[];
     /** Logical Play Games achievement ids already earned (local queue). */
     unlockedAchievements?: string[];
     /** Active world BGM key (`wanderlust` / `wonders-of-nature` / `earth-in-bloom`). Optional for older saves. */

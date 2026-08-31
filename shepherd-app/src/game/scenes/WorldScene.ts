@@ -22,24 +22,27 @@ import { Thorns, THORN_SNARE_RADIUS, placeThorns } from '../world/Thorns';
 import { StaffPickup } from '../world/StaffPickup';
 import { BibleGem, placeBibleGems, spawnBibleGemAway } from '../world/BibleGem';
 import { watercolorWorld } from '../world/watercolorWorld';
+import { clearGoldPavers, goldPaverSpotOpen, nearestGoldPaverDist, rainGoldPaver } from '../world/goldPaver';
 import { speakCue, stopSpeech, pauseSpeech, resumeSpeech, speechAwaitingFinish, clearAllSpeech } from '../ui/speech';
 import { playGemDing, tickWalkSound } from '../audio/cues';
 import { startHowling, stopHowling, suspendHowling, syncHowling, unsuspendHowling } from '../audio/howl';
 import { isSoundOn, setSoundOn } from '../audio/soundPref';
 import { WANDERLUST_KEY, WONDERS_KEY, EARTH_IN_BLOOM_KEY, applySavedWorldMusic, clearWorldMusicProgress, clearWorldMusicSeek, fadeInWorldMusic, fadeOutWorldMusic, getActiveWorldMusicKey, getWorldMusicProgress, isWorldMusicKey, setWorldMusicTrack, startWorldMusic, stopWorldMusic } from '../audio/worldMusic';
 import { cueWaitingBleat, holdSheepSounds, playHappyBaah, playLaggingBaah, playStrayBaah, stopSheepSounds, tickNightBaahs as tickNightFlockBaahs, tickSheepSounds } from '../audio/sheepSounds';
+import { WELL_DONE_LINE } from '../audio/spokenLines';
 import { corinthians15Line, isaiah11LionLine, isaiah11WolfLine, isaiah53Line, john10Line, john14Line, psalm23Comfort, psalm23FiveTable, psalm23Half, revelation21CityLine } from '../data/scripture';
 import { nextWaterVerseId, waterVerseLine } from '../data/waterVerses';
 import { nextTreeVerseId, treeVerseLine } from '../data/treeVerses';
+import { nextThornSnareVerseId, thornVerseLine, EZEKIEL_28_24 } from '../data/thornVerses';
 import { BibleGemHint } from '../ui/BibleGemHint';
-import { LostSheepHint } from '../ui/LostSheepHint';
+import { LostSheepHint, isHintTargetOnScreen } from '../ui/LostSheepHint';
 import { spawnPetHeart } from '../ui/petHeart';
 import { BandageButton } from '../ui/BandageButton';
 import { SETTINGS_GEAR_KEY, SETTINGS_GEAR_SIZE, ensureSettingsGear } from '../ui/settingsGear';
 import { SOUND_ICON_SIZE, ensureSoundIcons, soundIconKey } from '../ui/soundIcon';
 import { TREASURE_CHEST_KEY, TREASURE_CHEST_SIZE, ensureTreasureChest } from '../ui/treasureChest';
 import { applyAchievements, syncAchievements } from '../achievements/achievements';
-import { GameSave, StoryCheckpoint, loadSave, writeSave } from '../save/gameSave';
+import { GameSave, StoryCheckpoint, loadSave, writeSave, clearSave } from '../save/gameSave';
 
 const FLOCK_NAMES = ['Clover', 'Snowball', 'Milo', 'Biscuit'];
 const PEACEABLE_JOINERS = ['Leo', 'Sarah'] as const;
@@ -66,6 +69,20 @@ const THORN_REARM_WALK = 300;
 const TREE_REST_COOLDOWN_PX = 300;
 /** After a flock drink, stay off until the shepherd walks this far from the water. */
 const WATER_DRINK_COOLDOWN_PX = 300;
+/** Walk toward Jerusalem within this cone to rain gold stones. */
+const CITY_AIM_DOT = 0.82;
+/** Next stone: how much to follow last→city vs the walk heading. */
+const GOLD_FROM_LAST = 0.8;
+/** First stone: how much to lean toward the city vs the walk heading. */
+const GOLD_CITY_BLEND = 0.7;
+const GOLD_SPACING = 64;
+const GOLD_AHEAD_MIN = 200;
+/** Never rain a stone farther from the shepherd than this. */
+const GOLD_MAX_FROM_PLAYER = 400;
+/** Walk this far from every stone before starting a fresh path (reusing the same 24). */
+const GOLD_ABANDON_PATH = 600;
+/** Land this far along the walk heading so the shepherd cannot catch the stone mid-fall. */
+const GOLD_MIN_IN_FRONT = 110;
 const HOLE_ASIDE_DIST = 156;
 const HOLE_ENTER_NUDGE = 16;
 /** Pause stray teleport / lag warning and walk-into petting while shepherd is this close to the hole. */
@@ -202,6 +219,7 @@ export class WorldScene extends Scene {
     private foundGems: string[] = [];
     private foundWaterVerses: string[] = [];
     private foundTreeVerses: string[] = [];
+    private foundThornVerses: string[] = [];
     private penTableStarted = false;
     /** Walk into the south opening without fence keep-outs, then lie down as the gate. */
     private walkingToGate = false;
@@ -221,6 +239,8 @@ export class WorldScene extends Scene {
     private lastCue = '';
     private scriptId = 0;
     private scriptPlaying = false;
+    private wellDoneStarted = false;
+    private returningToIntro = false;
     /** Gem verses waiting until the current spoken script finishes. */
     private gemVerseQueue: string[] = [];
     /** Tree verse waiting until current speech finishes (sit happens immediately). */
@@ -229,6 +249,7 @@ export class WorldScene extends Scene {
     private lagWarned = new WeakSet<Sheep>();
     private lostHint!: LostSheepHint;
     private gemHint!: BibleGemHint;
+    private lastGoldStone: { x: number; y: number } | null = null;
     private nextNames = FLOCK_NAMES.slice(1);
     private foundCount = 0;
     private heardPsalm1 = false;
@@ -352,6 +373,7 @@ export class WorldScene extends Scene {
             this.foundGems = save.foundGems ?? [];
             this.foundWaterVerses = save.foundWaterVerses ?? [];
             this.foundTreeVerses = save.foundTreeVerses ?? [];
+            this.foundThornVerses = save.foundThornVerses ?? [];
             this.lastCheckpoint = save.checkpoint;
 
             // Seed before restoreSave — restore may start/stop BGM (dawn wake / night).
@@ -422,10 +444,15 @@ export class WorldScene extends Scene {
     }
 
     update (_time: number, delta: number): void {
+        if (this.wellDoneStarted) {
+            return;
+        }
+
         const keepOuts = this.worldKeepOuts();
         this.shepherd.update(this.shepherdKeepOuts(keepOuts));
         tickWalkSound(this, this.shepherd.isMoving && !this.shepherd.isLyingDown);
         watercolorWorld().rainIntoView(this);
+        this.maybeRainGoldRoad();
         watercolorWorld().tick(this, this.time.now);
 
         this.tryUnlockLoadPetting();
@@ -496,6 +523,7 @@ export class WorldScene extends Scene {
         tickSheepSounds(this, this.flock, this.shepherd.sprite, this.nightStarted);
         this.lostHint.update(this, this.shepherd, this.hintTarget(), Boolean(this.staffPickup));
         this.gemHint.update(this, this.shepherd, this.gemHintTarget());
+        this.maybeBeginWellDone();
         this.updateBandageButton();
         this.tickPetting();
         this.maybePickupStaff();
@@ -676,14 +704,13 @@ export class WorldScene extends Scene {
         });
     }
 
-    private onAte (sheep: Sheep): void {
+    private onAte (_sheep: Sheep): void {
         if (this.heardPsalm2) {
             return;
         }
 
         this.heardPsalm2 = true;
         this.playLines([
-            `${sheep.name} is eating.`,
             psalm23Half(2, 'a'),
             isaiah53Line()
         ], () => {
@@ -816,12 +843,6 @@ export class WorldScene extends Scene {
             return `Help ${snared.name}!`;
         }
 
-        const eating = this.flock.find((sheep) => sheep.mood === 'eating');
-
-        if (eating) {
-            return `${eating.name} is eating.`;
-        }
-
         const drinking = this.flock.some((sheep) => sheep.mood === 'drinking');
 
         if (drinking) {
@@ -921,20 +942,91 @@ export class WorldScene extends Scene {
             return this.sheepfold;
         }
 
-        if (this.cityObjectiveOpen() && this.city) {
-            return this.city;
-        }
-
         return null;
     }
 
-    /** Always points at the nearest uncollected Bible gem while any remain. */
+    /** Nearest Bible gem, or trees/water that still have unread passages once gems are gone. */
     private gemHintTarget (): { x: number; y: number } | null {
-        if (this.gems.length === 0) {
+        if (this.gems.length > 0) {
+            return this.closestToShepherd(this.gems);
+        }
+
+        const spots: { x: number; y: number }[] = [];
+
+        if (nextTreeVerseId(this.foundTreeVerses, this.shepherd.wearsWhite)) {
+            spots.push(...this.trees);
+        }
+
+        if (nextWaterVerseId(this.foundWaterVerses)) {
+            spots.push(...this.water);
+        }
+
+        if (spots.length === 0) {
             return null;
         }
 
-        return this.closestToShepherd(this.gems);
+        return this.closestToShepherd(spots);
+    }
+
+    /** When the gem hint has nothing left to point at, fade out and return to the intro. */
+    private maybeBeginWellDone (): void {
+        if (this.wellDoneStarted || this.overlayOpen() || this.scriptPlaying) {
+            return;
+        }
+
+        if (this.gemHintTarget()) {
+            return;
+        }
+
+        if (this.foundGems.length === 0 && this.gems.length === 0) {
+            return;
+        }
+
+        this.beginWellDone();
+    }
+
+    private beginWellDone (): void {
+        this.wellDoneStarted = true;
+        this.scriptId += 1;
+        this.scriptPlaying = true;
+        fadeOutWorldMusic(this, 1600);
+        holdSheepSounds(this);
+        stopHowling();
+
+        this.tweens.add({
+            targets: this.sleepVeil,
+            alpha: 1,
+            duration: 1800,
+            ease: 'Sine.easeInOut',
+            onComplete: () => {
+                if (!this.sys.isActive() || this.returningToIntro) {
+                    return;
+                }
+
+                const { width, height } = this.scale;
+                this.add.text(width / 2, height / 2, WELL_DONE_LINE, {
+                    fontFamily: 'Georgia, Palatino, serif',
+                    fontSize: '36px',
+                    color: '#f4ead8',
+                    align: 'center',
+                    wordWrap: { width: width - 80 }
+                }).setOrigin(0.5).setScrollFactor(0).setDepth(25);
+
+                speakCue(WELL_DONE_LINE, () => this.returnToIntro());
+                this.time.delayedCall(14000, () => this.returnToIntro());
+            }
+        });
+    }
+
+    private returnToIntro (): void {
+        if (this.returningToIntro || !this.sys.isActive()) {
+            return;
+        }
+
+        this.returningToIntro = true;
+        clearSave();
+        clearAllSpeech();
+        this.scene.start('IntroScene');
     }
 
     private closestToShepherd (points: { x: number; y: number }[]): { x: number; y: number } {
@@ -1075,6 +1167,7 @@ export class WorldScene extends Scene {
             foundGems: [...this.foundGems],
             foundWaterVerses: [...this.foundWaterVerses],
             foundTreeVerses: [...this.foundTreeVerses],
+            foundThornVerses: [...this.foundThornVerses],
             unlockedAchievements: previous?.unlockedAchievements ?? [],
             musicKey: music.key,
             musicSeek: music.seek
@@ -1232,8 +1325,12 @@ export class WorldScene extends Scene {
         this.drinkCuePlayed = false;
         this.drinkGatherAt = 0;
         this.treeVisit = null;
+        this.lastGoldStone = null;
+        clearGoldPavers(this);
         this.lastCue = '';
         this.scriptPlaying = false;
+        this.wellDoneStarted = false;
+        this.returningToIntro = false;
         this.gemVerseQueue = [];
         this.pendingTreeVerseId = null;
         this.nextNames = FLOCK_NAMES.slice(1);
@@ -1382,7 +1479,7 @@ export class WorldScene extends Scene {
     private updateBandageButton (): void {
         const hurt = this.hurtNeedingBandage();
 
-        if (!hurt || this.bandageRescuing || (this.scriptPlaying && !hurt.hurtByWolf)) {
+        if (!hurt || this.bandageRescuing || this.scriptBlocksBandage(hurt)) {
             this.bandageButton.setVisible(false);
             return;
         }
@@ -1397,6 +1494,7 @@ export class WorldScene extends Scene {
     private tickThorns (): void {
         if (this.heardCorinthians) {
             this.bloomThorns();
+            this.maybeBloomThornVerse();
             return;
         }
 
@@ -1424,9 +1522,56 @@ export class WorldScene extends Scene {
             sheep.snareInThorns();
             this.thornsArmed = false;
             this.thornsRearmFrom = null;
-            this.showCue(`Help ${sheep.name}!`);
+            this.speakThornSnareVerse(sheep.name);
             return;
         }
+    }
+
+    private speakThornSnareVerse (name: string): void {
+        const verseId = nextThornSnareVerseId(this.foundThornVerses);
+
+        if (!verseId) {
+            this.showCue(`Help ${name}!`);
+            return;
+        }
+
+        this.foundThornVerses.push(verseId);
+        this.saveProgress(this.lastCheckpoint ?? 'hurt-sheep');
+        this.playLines([thornVerseLine(verseId)]);
+    }
+
+    /** After the change: Ezekiel 28:24 the first time the shepherd walks by bloomed thorns. */
+    private maybeBloomThornVerse (): void {
+        if (this.foundThornVerses.includes(EZEKIEL_28_24.id)) {
+            return;
+        }
+
+        if (
+            this.scriptPlaying
+            || this.bandageRescuing
+            || this.shepherd.isLyingDown
+            || this.shepherd.isSitting
+            || this.shepherd.isGuided
+        ) {
+            return;
+        }
+
+        const sx = this.shepherd.sprite.x;
+        const sy = this.shepherd.sprite.y;
+        const near = this.thorns.some((thorn) => thorn.isNear(sx, sy));
+
+        if (!near) {
+            return;
+        }
+
+        this.foundThornVerses.push(EZEKIEL_28_24.id);
+        this.saveProgress(this.lastCheckpoint ?? '1-cor-15-51');
+        this.playLines([thornVerseLine(EZEKIEL_28_24.id)]);
+    }
+
+    /** Wolf or thorn rescue can start while a verse is still speaking. */
+    private scriptBlocksBandage (hurt: Sheep): boolean {
+        return this.scriptPlaying && !hurt.hurtByWolf && !hurt.snaredInThorns;
     }
 
     /** After a rescue, turn snares back on once the shepherd has walked far enough. */
@@ -1558,7 +1703,7 @@ export class WorldScene extends Scene {
     private tryBandage (): void {
         const hurt = this.hurtNeedingBandage();
 
-        if (!hurt || this.bandageRescuing || (this.scriptPlaying && !hurt.hurtByWolf)) {
+        if (!hurt || this.bandageRescuing || this.scriptBlocksBandage(hurt)) {
             return;
         }
 
@@ -1826,6 +1971,7 @@ export class WorldScene extends Scene {
             foundGems: [...this.foundGems],
             foundWaterVerses: [...this.foundWaterVerses],
             foundTreeVerses: [...this.foundTreeVerses],
+            foundThornVerses: [...this.foundThornVerses],
             heard: {
                 heardPsalm1: this.heardPsalm1,
                 heardPsalm1b: this.heardPsalm1b,
@@ -1932,6 +2078,101 @@ export class WorldScene extends Scene {
         setWorldMusicTrack(this, EARTH_IN_BLOOM_KEY);
         fadeInWorldMusic(this, 800);
         this.playLines([revelation21CityLine()]);
+    }
+
+    private maybeRainGoldRoad (): void {
+        if (!this.city || !this.cityObjectiveOpen()) {
+            return;
+        }
+
+        if (!this.shepherd.isMoving || this.shepherd.isLyingDown) {
+            return;
+        }
+
+        const sx = this.shepherd.sprite.x;
+        const sy = this.shepherd.sprite.y;
+        const dx = this.city.x - sx;
+        const dy = this.city.y - sy;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist < 8) {
+            return;
+        }
+
+        const toCityX = dx / dist;
+        const toCityY = dy / dist;
+        const heading = this.shepherd.moveHeading;
+        const dot = heading.x * toCityX + heading.y * toCityY;
+
+        if (dot < CITY_AIM_DOT) {
+            return;
+        }
+
+        if (isHintTargetOnScreen(this, this.city.x, this.city.y)) {
+            return;
+        }
+
+        if (nearestGoldPaverDist(sx, sy) >= GOLD_ABANDON_PATH) {
+            this.lastGoldStone = null;
+        }
+
+        if (this.lastGoldStone) {
+            const lastDx = this.lastGoldStone.x - sx;
+            const lastDy = this.lastGoldStone.y - sy;
+
+            if (Math.hypot(lastDx, lastDy) >= GOLD_MAX_FROM_PLAYER
+                && lastDx * heading.x + lastDy * heading.y > 0) {
+                return;
+            }
+        }
+
+        let originX = sx;
+        let originY = sy;
+        let dirX = heading.x * (1 - GOLD_CITY_BLEND) + toCityX * GOLD_CITY_BLEND;
+        let dirY = heading.y * (1 - GOLD_CITY_BLEND) + toCityY * GOLD_CITY_BLEND;
+        let stepFrom = GOLD_AHEAD_MIN;
+        let stepTo = GOLD_AHEAD_MIN;
+
+        if (this.lastGoldStone) {
+            const lx = this.lastGoldStone.x;
+            const ly = this.lastGoldStone.y;
+            const fromLastX = this.city.x - lx;
+            const fromLastY = this.city.y - ly;
+            const fromLastLen = Math.hypot(fromLastX, fromLastY) || 1;
+
+            originX = lx;
+            originY = ly;
+            dirX = (fromLastX / fromLastLen) * GOLD_FROM_LAST + heading.x * (1 - GOLD_FROM_LAST);
+            dirY = (fromLastY / fromLastLen) * GOLD_FROM_LAST + heading.y * (1 - GOLD_FROM_LAST);
+            stepFrom = GOLD_SPACING;
+            stepTo = Math.hypot(sx - lx, sy - ly) + GOLD_MAX_FROM_PLAYER;
+        }
+
+        const dirLen = Math.hypot(dirX, dirY) || 1;
+        dirX /= dirLen;
+        dirY /= dirLen;
+        const along = Math.atan2(dirY, dirX);
+
+        for (let alongDist = stepFrom; alongDist <= stepTo; alongDist += GOLD_SPACING) {
+            const x = originX + dirX * alongDist;
+            const y = originY + dirY * alongDist;
+
+            if (Math.hypot(x - sx, y - sy) > GOLD_MAX_FROM_PLAYER) {
+                continue;
+            }
+
+            if ((x - sx) * heading.x + (y - sy) * heading.y < GOLD_MIN_IN_FRONT) {
+                continue;
+            }
+
+            if (this.city.coversPoint(x, y) || !goldPaverSpotOpen(x, y)) {
+                continue;
+            }
+
+            rainGoldPaver(this, x, y, along);
+            this.lastGoldStone = { x, y };
+            return;
+        }
     }
 
     private fold (): Sheepfold {
@@ -2044,7 +2285,7 @@ export class WorldScene extends Scene {
 
         // After John 10:2: pen the flock, wait a beat, then sleep.
         // Does not depend on the speech onDone (heardJohn102 is set when the line starts).
-        if (this.scriptPlaying || this.shepherd.isLyingDown || this.flockHasWolfVictim()) {
+        if (this.scriptPlaying || this.shepherd.isLyingDown) {
             return;
         }
 
@@ -2560,6 +2801,10 @@ export class WorldScene extends Scene {
 
     private settleFold (): void {
         this.flock.forEach((sheep, slot) => {
+            if (sheep.hurt) {
+                return;
+            }
+
             const rest = this.fold().restSpot(slot);
             sheep.settleInPen(rest.x, rest.y);
         });
@@ -2650,11 +2895,11 @@ export class WorldScene extends Scene {
         // Restore HUD cue layout before speakLines shows the flock cue again.
         this.styleCueForDay();
         this.shepherd.wake();
+        this.applyPeaceableKingdom();
         this.releaseFlockFromPen(this.fold());
         this.penTableStarted = false;
         stopHowling();
         this.destroyAllWolves();
-        this.applyPeaceableKingdom();
         // Crossing night resets seek; morning track always starts at 0.
         clearWorldMusicSeek();
         setWorldMusicTrack(this, WONDERS_KEY);
@@ -2689,6 +2934,10 @@ export class WorldScene extends Scene {
         this.ensurePeaceableHunt();
 
         for (const sheep of this.flock) {
+            if (sheep.hurt) {
+                sheep.heal();
+            }
+
             sheep.hungry = false;
             sheep.snack = true;
             sheep.changed = true;

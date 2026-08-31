@@ -15,10 +15,11 @@ export const SHEEP_BLEAT_FILES: ReadonlyArray<{ key: string; file: string }> = [
 
 const QUIET_KEYS = ['sheep-bleat-1', 'sheep-bleat-2', 'sheep-bleat-3', 'sheep-bleat-4'];
 const LOUD_KEYS = ['sheep-baa-loud-1', 'sheep-baa-loud-2'];
-const CALM_GAP_MS = 9000;
+const CALM_GAP_MS = 5200;
 const HEAR_HURT = 2600;
 const HEAR_LOST = 1600;
 const HEAR_CALM = 980;
+const HEAR_HAPPY = 1600;
 const HEAR_NIGHT = 1680;
 const HEAR_NIGHT_SCARED = 2200;
 const HEAR_STRAY = 3200;
@@ -37,6 +38,7 @@ export type NightBaahContext = {
 
 const nextBleatAt = new WeakMap<Sheep, number>();
 let lastCalmBleatAt = 0;
+let flockAnswerUntil = 0;
 let nextNightBaahAt = 0;
 let nightAtmosphere = false;
 let audioHeld = false;
@@ -66,7 +68,7 @@ export function tickSheepSounds (scene: Scene, flock: Sheep[], listener: { x: nu
             continue;
         }
 
-        maybeBleat(scene, sheep, listener, now);
+        maybeBleat(scene, sheep, flock, listener, now);
     }
 }
 
@@ -294,6 +296,7 @@ export function holdSheepSounds (scene: Scene): void {
 export function stopSheepSounds (scene: Scene): void {
     holdSheepSounds(scene);
     lastCalmBleatAt = 0;
+    flockAnswerUntil = 0;
     nextNightBaahAt = 0;
     nightAtmosphere = false;
 }
@@ -325,7 +328,7 @@ function postponeBleats (flock: Sheep[], now: number): void {
     }
 }
 
-function maybeBleat (scene: Scene, sheep: Sheep, listener: { x: number; y: number }, now: number): void {
+function maybeBleat (scene: Scene, sheep: Sheep, flock: Sheep[], listener: { x: number; y: number }, now: number): void {
     if (!shouldBleat(sheep)) {
         nextBleatAt.set(sheep, now + delayFor(sheep));
         return;
@@ -342,7 +345,9 @@ function maybeBleat (scene: Scene, sheep: Sheep, listener: { x: number; y: numbe
         return;
     }
 
-    if (!sheep.hurt && now - lastCalmBleatAt < CALM_GAP_MS) {
+    const answering = now < flockAnswerUntil;
+
+    if (!sheep.hurt && !answering && now - lastCalmBleatAt < CALM_GAP_MS) {
         nextBleatAt.set(sheep, now + 1400 + Math.random() * 2200);
         return;
     }
@@ -354,6 +359,7 @@ function maybeBleat (scene: Scene, sheep: Sheep, listener: { x: number; y: numbe
 
     if (!sheep.hurt) {
         lastCalmBleatAt = now;
+        maybeCueFlockAnswer(flock, sheep, now);
     }
 
     nextBleatAt.set(sheep, now + delayFor(sheep));
@@ -376,6 +382,10 @@ function firstDelayFor (sheep: Sheep): number {
         return 3500 + Math.random() * 5500;
     }
 
+    if (isHappyFollower(sheep)) {
+        return 1800 + Math.random() * 4200;
+    }
+
     return 8000 + Math.random() * 14000;
 }
 
@@ -388,7 +398,31 @@ function delayFor (sheep: Sheep): number {
         return 10000 + Math.random() * 9000;
     }
 
+    if (isHappyFollower(sheep)) {
+        return 7000 + Math.random() * 11000;
+    }
+
     return 22000 + Math.random() * 18000;
+}
+
+function isHappyFollower (sheep: Sheep): boolean {
+    return sheep.mood === 'following' && !sheep.hurt && !sheep.peaceable;
+}
+
+function maybeCueFlockAnswer (flock: Sheep[], speaker: Sheep, now: number): void {
+    if (!isHappyFollower(speaker) || Math.random() > 0.4) {
+        return;
+    }
+
+    const others = flock.filter((sheep) => sheep !== speaker && isHappyFollower(sheep));
+
+    if (others.length === 0) {
+        return;
+    }
+
+    const buddy = others[Math.floor(Math.random() * others.length)];
+    nextBleatAt.set(buddy, now + 280 + Math.random() * 720);
+    flockAnswerUntil = now + 1200;
 }
 
 function playBleat (scene: Scene, sheep: Sheep, listener: { x: number; y: number }): boolean {
@@ -549,8 +583,19 @@ function bleatSettings (scene: Scene, sheep: Sheep, listener: { x: number; y: nu
     }
 
     const lost = sheep.mood === 'waiting';
-    const hear = lost ? HEAR_LOST : HEAR_CALM;
+    const happy = isHappyFollower(sheep);
+    const hear = lost ? HEAR_LOST : happy ? HEAR_HAPPY : HEAR_CALM;
     const falloff = 1 - clamp(dist / hear, 0, 1);
+
+    if (happy) {
+        return {
+            volume: lerp(0.04, 0.26, falloff) * (0.82 + Math.random() * 0.28),
+            pan: clamp(pan + rand(-0.08, 0.08), -1, 1),
+            rate: rand(1.04, 1.13),
+            detune: rand(24, 160)
+        };
+    }
+
     const near = lost ? 0.07 : 0.05;
     const far = lost ? 0.012 : 0.008;
 

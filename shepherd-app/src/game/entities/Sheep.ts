@@ -16,6 +16,8 @@ const DRINK_MS = 2600;
 const DRINK_ARRIVE = 16;
 const EAT_MS = 2600;
 const SNACK_COOLDOWN_MS = 9000;
+/** After a meal, stay out of walk-into pet range while they rejoin the trail. */
+const AFTER_EAT_PET_SUPPRESS_MS = 5000;
 const SHEEP_SIZE = 48;
 /** Biscuit is the lamb — smaller sprite; slower follow until the change. */
 const BISCUIT_SIZE = 34 * 0.95;
@@ -485,6 +487,7 @@ export class Sheep {
                 this.mood = 'following';
                 this.hungry = false;
                 this.nextSnackAt = now + SNACK_COOLDOWN_MS;
+                this.deferWalkIntoPetting(AFTER_EAT_PET_SUPPRESS_MS);
                 this.eatPatch?.markEaten(now);
                 this.eatPatch = null;
             }

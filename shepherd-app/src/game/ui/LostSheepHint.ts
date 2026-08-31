@@ -2,7 +2,7 @@ import { GameObjects, Scene } from 'phaser';
 import { Shepherd } from '../entities/Shepherd';
 
 const OFFSET = 110;
-const HIDE_PADDING = 90;
+export const HINT_HIDE_PADDING = 90;
 
 export class LostSheepHint {
     private readonly arrow: GameObjects.Image;
@@ -20,7 +20,7 @@ export class LostSheepHint {
             return;
         }
 
-        if (!keepOnScreen && isOnScreen(scene, target.x, target.y)) {
+        if (!keepOnScreen && isHintTargetOnScreen(scene, target.x, target.y)) {
             this.arrow.setVisible(false);
             return;
         }
@@ -36,13 +36,13 @@ export class LostSheepHint {
     }
 }
 
-function isOnScreen (scene: Scene, x: number, y: number): boolean {
+export function isHintTargetOnScreen (scene: Scene, x: number, y: number): boolean {
     const view = scene.cameras.main.worldView;
 
-    return x > view.x + HIDE_PADDING
-        && x < view.right - HIDE_PADDING
-        && y > view.y + HIDE_PADDING
-        && y < view.bottom - HIDE_PADDING;
+    return x > view.x + HINT_HIDE_PADDING
+        && x < view.right - HINT_HIDE_PADDING
+        && y > view.y + HINT_HIDE_PADDING
+        && y < view.bottom - HINT_HIDE_PADDING;
 }
 
 function ensureHintTexture (scene: Scene): void {

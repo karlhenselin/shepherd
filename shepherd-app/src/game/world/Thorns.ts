@@ -2,50 +2,31 @@ import { GameObjects, Scene } from 'phaser';
 import { characterDepth, regionCenter } from './constants';
 import { WaterSource } from './WaterSource';
 
-const TEXTURE_KEY = 'thorns-bramble';
-const TEXTURE_SIZE = 192;
+const BRAMBLE_KEY = 'thorns';
+const ROSES_KEY = 'thorns-roses';
 const DISPLAY_SIZE = 180;
 export const THORN_SNARE_RADIUS = 95;
+/** After the change: close enough to a bloomed bush to hear Ezekiel 28:24. */
+export const THORN_WALK_BY_RADIUS = 120;
 const THORN_MIN_GAP = 200;
 const WATER_EDGE_MARGIN = 16;
+/** Ground decal: above water/holes, below grass and Y-sorted characters. */
+const MOUND_DEPTH = 2.35;
+const DEFAULT_STEM_ORIGIN = 0.64;
 
-type StalkSpec = {
-    x: number;
-    y: number;
-    lean: number;
-    height: number;
-    width: number;
-};
-
-/** Individual stems scattered across the patch — not one dense clump. */
-const STALKS: StalkSpec[] = [
-    { x: 28, y: 168, lean: -12, height: 108, width: 3 },
-    { x: 52, y: 176, lean: 6, height: 96, width: 3 },
-    { x: 78, y: 162, lean: -4, height: 118, width: 3.5 },
-    { x: 104, y: 170, lean: 10, height: 102, width: 3 },
-    { x: 128, y: 158, lean: -8, height: 112, width: 3 },
-    { x: 152, y: 166, lean: 5, height: 100, width: 3 },
-    { x: 36, y: 148, lean: 14, height: 88, width: 2.5 },
-    { x: 64, y: 154, lean: -16, height: 92, width: 2.5 },
-    { x: 92, y: 142, lean: 8, height: 104, width: 3 },
-    { x: 118, y: 150, lean: -10, height: 94, width: 2.5 },
-    { x: 144, y: 138, lean: 12, height: 110, width: 3 },
-    { x: 168, y: 152, lean: -6, height: 86, width: 2.5 },
-    { x: 44, y: 132, lean: -20, height: 78, width: 2.5 },
-    { x: 110, y: 128, lean: 18, height: 82, width: 2.5 },
-    { x: 156, y: 124, lean: -14, height: 76, width: 2.5 }
-];
+const stemOriginY: Record<string, number> = {};
 
 export class Thorns {
     readonly sprite: GameObjects.Sprite;
+    private readonly mound: GameObjects.Image;
     /** After 1 Corinthians 15:51, roses bloom and the bush no longer snares. */
     bloomed = false;
 
     constructor (scene: Scene, x: number, y: number) {
-        ensureThornsTexture(scene);
-        this.sprite = scene.add.sprite(x, y, TEXTURE_KEY);
-        this.sprite.setDisplaySize(DISPLAY_SIZE, DISPLAY_SIZE);
-        this.sprite.setOrigin(0.5, 0.92);
+        this.mound = scene.add.image(x, y, moundKey(BRAMBLE_KEY));
+        this.sprite = scene.add.sprite(x, y, BRAMBLE_KEY);
+        this.applyLook(BRAMBLE_KEY);
+        this.mound.setDepth(MOUND_DEPTH);
         this.sprite.setDepth(characterDepth(y));
     }
 
@@ -55,9 +36,7 @@ export class Thorns {
         }
 
         this.bloomed = true;
-        this.sprite.setTexture('thorns-roses');
-        this.sprite.setDisplaySize(DISPLAY_SIZE, DISPLAY_SIZE);
-        this.sprite.setOrigin(0.5, 0.92);
+        this.applyLook(ROSES_KEY);
     }
 
     get x (): number {
@@ -71,6 +50,26 @@ export class Thorns {
     contains (x: number, y: number): boolean {
         return Math.hypot(this.x - x, this.y - y) < THORN_SNARE_RADIUS;
     }
+
+    isNear (x: number, y: number): boolean {
+        return Math.hypot(this.x - x, this.y - y) < THORN_WALK_BY_RADIUS;
+    }
+
+    private applyLook (plantKey: string): void {
+        const originY = stemOriginY[plantKey] ?? DEFAULT_STEM_ORIGIN;
+        this.sprite.setTexture(plantKey);
+        this.sprite.setDisplaySize(DISPLAY_SIZE, DISPLAY_SIZE);
+        this.sprite.setOrigin(0.5, originY);
+        this.mound.setTexture(moundKey(plantKey));
+        this.mound.setDisplaySize(DISPLAY_SIZE, DISPLAY_SIZE);
+        this.mound.setOrigin(0.5, originY);
+    }
+}
+
+/** Peel dirt discs off the plant sprites so characters Y-sort against foliage only. */
+export function prepareThornArt (scene: Scene): void {
+    splitThornGround(scene, BRAMBLE_KEY);
+    splitThornGround(scene, ROSES_KEY);
 }
 
 /** Bramble patches around the map, clear of water and each other. */
@@ -114,6 +113,10 @@ export function placeThorns (scene: Scene, waters: WaterSource[] = []): Thorns[]
     }
 
     return placed;
+}
+
+function moundKey (plantKey: string): string {
+    return `${plantKey}-mound`;
 }
 
 function pickThornPoint (
@@ -164,61 +167,197 @@ function isValidThornSpot (
     return true;
 }
 
-function ensureThornsTexture (scene: Scene): void {
-    if (scene.textures.exists(TEXTURE_KEY)) {
+function splitThornGround (scene: Scene, key: string): void {
+    if (!scene.textures.exists(key) || scene.textures.exists(moundKey(key))) {
         return;
     }
 
-    const g = scene.add.graphics();
-    g.fillStyle(0x000000, 0);
-    g.fillRect(0, 0, TEXTURE_SIZE, TEXTURE_SIZE);
+    const texture = scene.textures.get(key);
+    const src = texture.getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+    const width = src.width;
+    const height = src.height;
+    const read = document.createElement('canvas');
+    read.width = width;
+    read.height = height;
+    const readCtx = read.getContext('2d');
 
-    for (const stalk of STALKS) {
-        drawStalk(g, stalk);
+    if (!readCtx) {
+        return;
     }
 
-    g.generateTexture(TEXTURE_KEY, TEXTURE_SIZE, TEXTURE_SIZE);
-    g.destroy();
+    readCtx.drawImage(src, 0, 0);
+    const image = readCtx.getImageData(0, 0, width, height);
+    const px = image.data;
+    const ellipse = fitDirtEllipse(px, width, height);
+
+    if (!ellipse) {
+        stemOriginY[key] = DEFAULT_STEM_ORIGIN;
+        return;
+    }
+
+    stemOriginY[key] = ellipse.cy / height;
+
+    const mound = readCtx.createImageData(width, height);
+    const plant = readCtx.createImageData(width, height);
+    const moundPx = mound.data;
+    const plantPx = plant.data;
+
+    for (let i = 0; i < px.length; i += 4) {
+        const a = px[i + 3];
+
+        if (a < 24) {
+            continue;
+        }
+
+        const r = px[i];
+        const g = px[i + 1];
+        const b = px[i + 2];
+
+        if (r <= 12 && g <= 12 && b <= 12) {
+            continue;
+        }
+
+        const p = i / 4;
+        const x = p % width;
+        const y = (p - x) / width;
+        const dx = (x - ellipse.cx) / ellipse.rx;
+        const dy = (y - ellipse.cy) / ellipse.ry;
+        const inDisc = dx * dx + dy * dy <= 1.08;
+        const vegetation = isFlowerColor(r, g, b) || isLeafColor(r, g, b) || isThornWood(r, g, b);
+        const ground = inDisc && !vegetation && (isDirtColor(r, g, b) || y >= ellipse.cy - 4);
+
+        if (ground) {
+            moundPx[i] = r;
+            moundPx[i + 1] = g;
+            moundPx[i + 2] = b;
+            moundPx[i + 3] = a;
+        }
+        else {
+            plantPx[i] = r;
+            plantPx[i + 1] = g;
+            plantPx[i + 2] = b;
+            plantPx[i + 3] = a;
+        }
+    }
+
+    const plantCanvas = document.createElement('canvas');
+    plantCanvas.width = width;
+    plantCanvas.height = height;
+    const plantCtx = plantCanvas.getContext('2d');
+    const moundCanvas = document.createElement('canvas');
+    moundCanvas.width = width;
+    moundCanvas.height = height;
+    const moundCtx = moundCanvas.getContext('2d');
+
+    if (!plantCtx || !moundCtx) {
+        return;
+    }
+
+    plantCtx.putImageData(plant, 0, 0);
+    moundCtx.putImageData(mound, 0, 0);
+    scene.textures.remove(key);
+    scene.textures.addCanvas(key, plantCanvas);
+    scene.textures.addCanvas(moundKey(key), moundCanvas);
 }
 
-function drawStalk (g: GameObjects.Graphics, stalk: StalkSpec): void {
-    const rad = (stalk.lean * Math.PI) / 180;
-    const topX = stalk.x + Math.sin(rad) * stalk.height;
-    const topY = stalk.y - Math.cos(rad) * stalk.height;
+function fitDirtEllipse (
+    px: Uint8ClampedArray,
+    width: number,
+    height: number
+): { cx: number; cy: number; rx: number; ry: number } | null {
+    let minY = height;
+    let maxY = 0;
 
-    g.lineStyle(stalk.width, 0x4a3528, 1);
-    g.lineBetween(stalk.x, stalk.y, topX, topY);
-    g.lineStyle(Math.max(1.5, stalk.width - 0.5), 0x3d2c1e, 1);
-    g.lineBetween(stalk.x + 0.5, stalk.y, topX + 0.5, topY);
-
-    const thornCount = Math.max(4, Math.floor(stalk.height / 18));
-
-    for (let i = 1; i <= thornCount; i++) {
-        const t = i / (thornCount + 1);
-        const px = stalk.x + Math.sin(rad) * stalk.height * t;
-        const py = stalk.y - Math.cos(rad) * stalk.height * t;
-        const flip = i % 2 === 0 ? 1 : -1;
-        const thornLean = rad + flip * (Math.PI / 2 + 0.35);
-        const thornLen = 10 + (i % 3) * 2;
-
-        g.lineStyle(2, 0x2a1c12, 1);
-        g.lineBetween(
-            px,
-            py,
-            px + Math.cos(thornLean) * thornLen,
-            py + Math.sin(thornLean) * thornLen
-        );
-        g.fillStyle(0x5c4634, 1);
-        g.fillTriangle(
-            px,
-            py,
-            px + Math.cos(thornLean) * thornLen,
-            py + Math.sin(thornLean) * thornLen,
-            px + Math.cos(thornLean + flip * 0.25) * (thornLen * 0.55),
-            py + Math.sin(thornLean + flip * 0.25) * (thornLen * 0.55)
-        );
+    for (let y = 0; y < height; y++) {
+        if (rowSpan(px, width, y).span > 0) {
+            minY = Math.min(minY, y);
+            maxY = Math.max(maxY, y);
+        }
     }
 
-    g.fillStyle(0x6b5340, 1);
-    g.fillCircle(topX, topY, 2.5);
+    if (maxY <= minY) {
+        return null;
+    }
+
+    const startY = Math.floor(minY + (maxY - minY) * 0.45);
+    let bestY = startY;
+    let bestSpan = 0;
+    let bestMinX = 0;
+    let bestMaxX = 0;
+
+    for (let y = startY; y <= maxY; y++) {
+        const row = rowSpan(px, width, y);
+
+        if (row.span > bestSpan) {
+            bestSpan = row.span;
+            bestY = y;
+            bestMinX = row.minX;
+            bestMaxX = row.maxX;
+        }
+    }
+
+    if (bestSpan < 8) {
+        return null;
+    }
+
+    const cx = (bestMinX + bestMaxX) / 2;
+    const cy = bestY;
+    const rx = Math.max(8, bestSpan / 2);
+    const ry = Math.max(8, maxY - cy);
+    return { cx, cy, rx, ry };
+}
+
+function rowSpan (
+    px: Uint8ClampedArray,
+    width: number,
+    y: number
+): { span: number; minX: number; maxX: number } {
+    let minX = width;
+    let maxX = 0;
+
+    for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+        const a = px[i + 3];
+        const r = px[i];
+        const g = px[i + 1];
+        const b = px[i + 2];
+
+        if (a < 24 || (r <= 12 && g <= 12 && b <= 12)) {
+            continue;
+        }
+
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+    }
+
+    if (maxX < minX) {
+        return { span: 0, minX: 0, maxX: 0 };
+    }
+
+    return { span: maxX - minX + 1, minX, maxX };
+}
+
+function isFlowerColor (r: number, g: number, b: number): boolean {
+    return r > 130 && r > g + 35 && r > b + 20;
+}
+
+function isLeafColor (r: number, g: number, b: number): boolean {
+    return g > r + 12 && g > b + 8;
+}
+
+function isThornWood (r: number, g: number, b: number): boolean {
+    return r < 80 && g < 62 && b < 52 && r + g + b < 180;
+}
+
+/** Sandy earth, pebbles, and dry grass — not thorn wood, leaves, or roses. */
+function isDirtColor (r: number, g: number, b: number): boolean {
+    if (isFlowerColor(r, g, b) || isLeafColor(r, g, b) || isThornWood(r, g, b)) {
+        return false;
+    }
+
+    const gray = Math.abs(r - g) < 28 && Math.abs(g - b) < 28;
+    const pebble = gray && r > 70 && r < 190;
+    const sand = r > 70 && g > 42 && b < 110 && r >= g - 8 && r - b > 12;
+    const dryGrass = r > 90 && g > 68 && b < 90 && r + g > b * 3;
+    return pebble || sand || dryGrass;
 }

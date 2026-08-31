@@ -22,8 +22,11 @@ import {
 } from '../data/scripture';
 import { TREE_VERSES, treeVerseLine } from '../data/treeVerses';
 import { WATER_VERSES, waterVerseLine } from '../data/waterVerses';
+import { THORN_VERSES, thornVerseLine } from '../data/thornVerses';
 
 const SHEEP_NAMES = ['Clover', 'Snowball', 'Milo', 'Biscuit', 'Sarah', 'Leo'] as const;
+
+export const WELL_DONE_LINE = 'Well done, good and faithful servant.';
 
 const STATIC_LINES = [
     'In the beginning',
@@ -76,7 +79,8 @@ const STATIC_LINES = [
     'Hey, Sarah.',
     'Easy, Sarah.',
     'Come here, Sarah.',
-    'Sweet Sarah.'
+    'Sweet Sarah.',
+    'Well done, good and faithful servant.'
 ] as const;
 
 const NAMED_TEMPLATES: Array<(name: string) => string> = [
@@ -148,6 +152,11 @@ export function allSpokenLines (): string[] {
 
     for (const verse of TREE_VERSES) {
         lines.add(treeVerseLine(verse.id));
+        lines.add(scriptureLine(verse));
+    }
+
+    for (const verse of THORN_VERSES) {
+        lines.add(thornVerseLine(verse.id));
         lines.add(scriptureLine(verse));
     }
 

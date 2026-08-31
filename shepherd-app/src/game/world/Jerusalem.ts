@@ -30,6 +30,15 @@ export class Jerusalem {
         return Math.hypot(this.x - x, this.y - y) < ENTER_RANGE;
     }
 
+    coversPoint (x: number, y: number, pad = 28): boolean {
+        const bounds = this.sprite.getBounds();
+
+        return x > bounds.x - pad
+            && x < bounds.right + pad
+            && y > bounds.y - pad
+            && y < bounds.bottom + pad;
+    }
+
     approachSpot (): { x: number; y: number } {
         return { x: this.x, y: this.y + CITY_APPROACH_Y };
     }

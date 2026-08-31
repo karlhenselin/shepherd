@@ -2,6 +2,7 @@ import { GameObjects, Math as PMath, Scene, Scenes } from 'phaser';
 import { foundBibleGems, scriptureLine, unlockedStoryPassages } from '../data/scripture';
 import { foundTreeVerses } from '../data/treeVerses';
 import { foundWaterVerses } from '../data/waterVerses';
+import { foundThornVerses } from '../data/thornVerses';
 import { loadSave } from '../save/gameSave';
 import { speakCue, stopSpeech } from '../ui/speech';
 
@@ -36,6 +37,7 @@ export class TreasureScene extends Scene {
         foundGems?: string[];
         foundWaterVerses?: string[];
         foundTreeVerses?: string[];
+        foundThornVerses?: string[];
         heard?: Parameters<typeof unlockedStoryPassages>[0];
     }): void {
         this.cameras.main.setBackgroundColor(PAPER);
@@ -44,6 +46,7 @@ export class TreasureScene extends Scene {
         const foundIds = data?.foundGems ?? save?.foundGems ?? [];
         const waterIds = data?.foundWaterVerses ?? save?.foundWaterVerses ?? [];
         const treeIds = data?.foundTreeVerses ?? save?.foundTreeVerses ?? [];
+        const thornIds = data?.foundThornVerses ?? save?.foundThornVerses ?? [];
         const heard = data?.heard ?? {
             heardPsalm1: save?.heardPsalm1,
             heardPsalm2: save?.heardPsalm2,
@@ -76,6 +79,7 @@ export class TreasureScene extends Scene {
         y = this.addSection(y, 'Bible gems', foundBibleGems(foundIds), wrap, true);
         y = this.addSection(y, 'Water and thirst', foundWaterVerses(waterIds), wrap, true);
         y = this.addSection(y, 'Shade of the trees', foundTreeVerses(treeIds), wrap, true);
+        y = this.addSection(y, 'Thorns', foundThornVerses(thornIds), wrap, true);
         y = this.addSection(y, 'Along the way', unlockedStoryPassages(heard), wrap, true);
 
         this.contentHeight = y;
