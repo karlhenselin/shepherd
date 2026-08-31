@@ -19,6 +19,7 @@
     "dev-nolog": "vite --config vite/config.dev.mjs",
     "build-nolog": "vite build --config vite/config.prod.mjs",
     "cap:sync": "npm run build-nolog && npx cap sync android",
+    "cap:android": "npm run cap:sync && npm run android",
     "android": "npx cap open android",
     "voice": "npx --yes tsx scripts/generate-voice.ts"
   },
