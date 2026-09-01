@@ -102,8 +102,6 @@ const LION_CHARGE_SPEED = 210;
 const WOLF_CHASE_FLEE_SPEED = 176;
 /** Start the east flee when the lion is this close to a wolf. */
 const LION_FLUSH_RANGE = 240;
-/** Minimum gap between night-wolf strikes. */
-const WOLF_ATTACK_COOLDOWN_MS = 15_000;
 const NIGHT_VEIL_ALPHA = 0.55;
 const NIGHT_VEIL_DEEPEN = 1.10;
 const NIGHT_DEEPEN_MS = 60_000;
@@ -3295,7 +3293,7 @@ export class WorldScene extends Scene {
 
             if (dist <= WOLF_ATTACK_RANGE) {
                 sheep.struckByWolf();
-                this.wolfAttackReadyAt = this.time.now + WOLF_ATTACK_COOLDOWN_MS;
+                this.wolf.walkAway(sheep.sprite.x, sheep.sprite.y);
                 this.showCue(`Help ${sheep.name}!`);
                 this.saveProgress('hurt-sheep');
                 return;

@@ -346,7 +346,7 @@ function ensureGemTextures (scene: Scene): void {
         const canvas = document.createElement('canvas');
         canvas.width = SIZE;
         canvas.height = SIZE;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
         if (!ctx) {
             throw new Error('Could not create gem sprite');

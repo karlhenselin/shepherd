@@ -21,7 +21,6 @@ export class Preloader extends Scene
         //  Load the assets for the game - Replace with your own assets
         this.load.setPath('assets');
 
-        this.load.image('logo', 'logo.png');
         this.load.image('sheep', 'sheep.png');
         this.load.image('sheepfold', 'sheepfold.png');
         this.load.image('wolf', 'wolf.png');
@@ -79,7 +78,7 @@ function knockOutNearBlack (scene: Scene, key: string, threshold = 10): void {
     const canvas = document.createElement('canvas');
     canvas.width = src.width;
     canvas.height = src.height;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
     if (!ctx) {
         return;

@@ -59,7 +59,7 @@ export class Wolf {
         ensureWolfShadow(scene);
 
         this.angle = Math.random() * Math.PI * 2;
-        const spawn = ringPoint(aroundX, aroundY, SHEEP_ORBIT_DIST, this.angle);
+        const spawn = ringPoint(aroundX, aroundY, SHEEP_ORBIT_DIST * 5, this.angle);
         this.originX = spawn.x;
         this.originY = spawn.y;
         this.shadow = scene.add.image(spawn.x, spawn.y + SHADOW_OFFSET, SHADOW_KEY);

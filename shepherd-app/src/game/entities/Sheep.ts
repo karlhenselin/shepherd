@@ -1,7 +1,6 @@
 import { Scene, GameObjects, Physics } from 'phaser';
 import { Shepherd } from './Shepherd';
 import { GrassPatch, GRASS_APPROACH_RANGE, GRASS_EAT_ARRIVE } from '../world/GrassPatch';
-import { WaterSource } from '../world/WaterSource';
 import { characterDepth } from '../world/constants';
 
 export const FOLLOW_SPEED = 150 * 0.95 * 0.95;
@@ -161,11 +160,14 @@ export class Sheep {
         ensureSheepShadow(scene);
 
         const lamb = this.name === 'Biscuit';
-        this.shadowOffset = lamb ? 13 * 0.95 : SHADOW_OFFSET;
+        this.shadowOffset = lamb ? 13 : SHADOW_OFFSET;
         this.shadow = scene.add.image(x, y + this.shadowOffset, 'sheep-shadow');
 
         if (lamb) {
-            this.shadow.setDisplaySize(28 * 0.95, 11 * 0.95);
+            this.shadow.setDisplaySize(27, 11);
+        }else if(this.name === 'Leo' || this.name === 'Sarah'){
+            this.shadow.setDisplaySize(60, 24);
+            this.shadowOffset = 5;
         }
 
         const texture = flockTextureKey(this.name);
@@ -184,7 +186,7 @@ export class Sheep {
 
         this.body = this.sprite.body as Physics.Arcade.Body;
         this.body.setCollideWorldBounds(true);
-        const bodyRadius = lamb ? Math.round(10 * 0.95) : Math.round(14 * this.sprite.width / SHEEP_SIZE);
+        const bodyRadius = lamb ? Math.round(10) : Math.round(14 * this.sprite.width / SHEEP_SIZE);
         this.body.setCircle(bodyRadius);
         this.body.setVelocity(0, 0);
         this.body.setImmovable(true);
@@ -429,7 +431,6 @@ export class Sheep {
 
     update (
         shepherd: Shepherd,
-        water: WaterSource[],
         grass: GrassPatch[],
         huddle = false,
         keepOuts: KeepOutZone[] = []
@@ -821,6 +822,13 @@ export class Sheep {
         this.shadow.setDepth(depth - 0.01);
         this.shadow.setPosition(this.sprite.x, this.sprite.y + this.shadowOffset);
         this.shadow.setFlipX(this.sprite.flipX);
+        if(this.name === 'Leo' || this.name === 'Sarah'){
+            if(this.sprite.flipX){
+                this.shadow.setAngle(-7);
+            }else{
+                this.shadow.setAngle(7);
+            }
+        }
     }
 
     /** Walk up to an uneaten tuft, then chew. */

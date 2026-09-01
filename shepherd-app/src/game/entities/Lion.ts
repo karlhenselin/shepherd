@@ -28,7 +28,6 @@ export class Lion {
         ensureLionShadow(scene);
 
         this.shadow = scene.add.image(x, y + SHADOW_OFFSET, SHADOW_KEY);
-        this.shadow.setDisplaySize(36, 12);
         this.sprite = scene.add.sprite(x, y, TEXTURE_KEY);
         const src = this.sprite.texture.getSourceImage() as { width: number; height: number };
         this.sprite.setDisplaySize(SIZE * (src.width / Math.max(src.height, 1)), SIZE);
