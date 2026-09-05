@@ -12,6 +12,10 @@ function uniqueIds (ids: AchievementId[]): AchievementId[] {
 
 /** Merge newly earned logical achievements into the save and unlock on Play Games. */
 export function applyAchievements (save: GameSave): GameSave {
+    if (save.achievementsDisabled) {
+        return save;
+    }
+
     const earned = earnedAchievements(save);
     const previous = (save.unlockedAchievements ?? []) as AchievementId[];
     const unlocked = uniqueIds([...previous, ...earned]);
@@ -52,7 +56,7 @@ export function syncAchievements (save?: GameSave | null): GameSave | null {
 export async function flushAchievementsToPlayGames (save?: GameSave | null): Promise<void> {
     const current = save ?? loadSave();
 
-    if (!current?.unlockedAchievements?.length) {
+    if (!current?.unlockedAchievements?.length || current.achievementsDisabled) {
         return;
     }
 

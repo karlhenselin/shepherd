@@ -86,6 +86,17 @@ export class WatercolorWorld {
         this.painted = new Uint8Array(this.gridCols * this.gridRows);
     }
 
+    /** World center of the main intro sky wash — keep this on screen in landscape. */
+    heavenFocus (): { x: number; y: number } {
+        const start = startCenter();
+        const wash = HEAVENS[0];
+
+        return {
+            x: start.x - REGION_WIDTH / 2 + wash.x * REGION_WIDTH,
+            y: start.y - REGION_HEIGHT / 2 + wash.y * REGION_HEIGHT
+        };
+    }
+
     beginCreation (asSky = false): void {
         if (this.creationStarted) {
             return;

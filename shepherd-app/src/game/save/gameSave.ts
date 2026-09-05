@@ -39,6 +39,10 @@ export type GameSave = {
     foundThornVerses?: string[];
     /** Logical Play Games achievement ids already earned (local queue). */
     unlockedAchievements?: string[];
+    /** Reached the Well Done ending screen. */
+    sawWellDone?: boolean;
+    /** Set when a cheat save is loaded; no further achievements are awarded. */
+    achievementsDisabled?: boolean;
     /** Active world BGM key (`wanderlust` / `wonders-of-nature` / `earth-in-bloom`). Optional for older saves. */
     musicKey?: string;
     /** Playback position in seconds. Day progress saves keep this; night / dawn resets to 0. Optional for older saves; missing/invalid → start at 0. */

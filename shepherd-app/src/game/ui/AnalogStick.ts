@@ -1,4 +1,5 @@
 import { GameObjects, Input, Scene } from 'phaser';
+import { chromeInsets } from './chromeInsets';
 
 const BASE_R = 70;
 const KNOB_R = 30;
@@ -54,8 +55,9 @@ export class AnalogStick {
 
     layout (): void {
         const { height } = this.scene.scale;
-        this.originX = PAD + BASE_R + 10;
-        this.originY = height - PAD - BASE_R - 10;
+        const inset = chromeInsets();
+        this.originX = PAD + BASE_R + 10 + inset.left;
+        this.originY = height - PAD - BASE_R - 10 - inset.bottom;
         this.hit.setPosition(this.originX, this.originY);
         this.base.setPosition(this.originX, this.originY);
 

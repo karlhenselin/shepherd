@@ -10,6 +10,7 @@ const UMBER = '#3d2c1e';
 
 export class IntroScene extends Scene {
     private leaving = false;
+    private worldFramed = false;
     private line!: GameObjects.Text;
     private citation!: GameObjects.Text;
     private wipe!: GameObjects.Rectangle;
@@ -67,6 +68,10 @@ export class IntroScene extends Scene {
         this.citation.setPosition(cx, cy + 36);
         this.wipe.setPosition(cx, cy);
         this.wipe.setSize(width, 2);
+
+        if (this.worldFramed) {
+            this.frameCreation();
+        }
     }
 
     private async play (): Promise<void> {
@@ -159,7 +164,19 @@ export class IntroScene extends Scene {
 
         this.cameras.main.setBackgroundColor(0xf7f3ea);
         this.wipe.setVisible(false);
-        this.cameras.main.centerOn(startCenter().x, startCenter().y);
+        this.frameCreation();
+    }
+
+    private frameCreation (): void {
+        const start = startCenter();
+        const heaven = watercolorWorld().heavenFocus();
+        const { height } = this.scale;
+        // Sky washes sit high in the start region. On a short landscape view the
+        // pretty blue centers clip off the top if we stay on the region center.
+        const fromTop = height * 0.28;
+        const lifted = heaven.y + height / 2 - fromTop;
+        this.cameras.main.centerOn(heaven.x, Math.min(start.y, lifted));
+        this.worldFramed = true;
     }
 
     private async appearWatercolors (): Promise<void> {

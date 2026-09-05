@@ -153,7 +153,11 @@ export class CheatScene extends Scene {
 
     private jumpTo (spot: CheatSpot): void {
         if (spot.save) {
-            writeSave(spot.save);
+            writeSave({
+                ...spot.save,
+                achievementsDisabled: true,
+                unlockedAchievements: []
+            });
         }
         else {
             clearSave();

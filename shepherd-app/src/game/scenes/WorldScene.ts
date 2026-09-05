@@ -39,6 +39,7 @@ import { LostSheepHint, isHintTargetOnScreen } from '../ui/LostSheepHint';
 import { spawnPetHeart } from '../ui/petHeart';
 import { AnalogStick } from '../ui/AnalogStick';
 import { BandageButton } from '../ui/BandageButton';
+import { chromePad, isPhoneChrome, makeHudInteractive } from '../ui/chromeInsets';
 import { SETTINGS_GEAR_KEY, SETTINGS_GEAR_SIZE, ensureSettingsGear } from '../ui/settingsGear';
 import { SOUND_ICON_SIZE, ensureSoundIcons, soundIconKey } from '../ui/soundIcon';
 import { TREASURE_CHEST_KEY, TREASURE_CHEST_SIZE, ensureTreasureChest } from '../ui/treasureChest';
@@ -235,7 +236,7 @@ export class WorldScene extends Scene {
     private soundToggle!: GameObjects.Image;
     private hudSettings!: GameObjects.Image;
     private hudChest!: GameObjects.Image;
-    private hudCheat!: GameObjects.Container;
+    private hudCheat!: GameObjects.Text;
     private analogStick!: AnalogStick;
     private bandageButton!: BandageButton;
     private bandageRescuing = false;
@@ -243,6 +244,7 @@ export class WorldScene extends Scene {
     private scriptId = 0;
     private scriptPlaying = false;
     private wellDoneStarted = false;
+    private sawWellDone = false;
     private returningToIntro = false;
     /** Gem verses waiting until the current spoken script finishes. */
     private gemVerseQueue: string[] = [];
@@ -352,7 +354,7 @@ export class WorldScene extends Scene {
 
         this.ensureCity(save?.pen);
 
-        this.cueText = this.add.text(16, 16, 'Find your sheep.', {
+        this.cueText = this.add.text(chromePad().left, chromePad().top, 'Find your sheep.', {
             fontFamily: 'Georgia, serif',
             fontSize: '18px',
             color: '#3d2c1e',
@@ -482,7 +484,6 @@ export class WorldScene extends Scene {
 
             const event = sheep.update(
                 this.shepherd,
-                this.water,
                 this.grass,
                 this.nightStarted,
                 flockKeepOuts
@@ -1038,6 +1039,7 @@ export class WorldScene extends Scene {
 
     private beginWellDone (): void {
         this.wellDoneStarted = true;
+        this.sawWellDone = true;
         this.scriptId += 1;
         this.scriptPlaying = true;
         this.saveProgress(this.lastCheckpoint ?? 'found-gem');
@@ -1337,6 +1339,7 @@ export class WorldScene extends Scene {
             foundTreeVerses: [...this.foundTreeVerses],
             foundThornVerses: [...this.foundThornVerses],
             unlockedAchievements: previous?.unlockedAchievements ?? [],
+            sawWellDone: this.sawWellDone,
             musicKey: music.key,
             musicSeek: music.seek
         }));
@@ -1360,6 +1363,7 @@ export class WorldScene extends Scene {
         this.heardJohn109 = save.heardJohn109 === true;
         this.heardCorinthians = save.heardCorinthians === true;
         this.heardCity = save.heardCity === true;
+        this.sawWellDone = save.sawWellDone === true;
         this.foundGems = save.foundGems ?? this.foundGems;
         this.foundWaterVerses = save.foundWaterVerses ?? this.foundWaterVerses;
         this.foundTreeVerses = save.foundTreeVerses ?? this.foundTreeVerses;
@@ -1505,6 +1509,7 @@ export class WorldScene extends Scene {
         this.lastCue = '';
         this.scriptPlaying = false;
         this.wellDoneStarted = false;
+        this.sawWellDone = false;
         this.returningToIntro = false;
         this.gemVerseQueue = [];
         this.scriptQueue = [];
@@ -1555,13 +1560,12 @@ export class WorldScene extends Scene {
         ensureSoundIcons(this);
         ensureTreasureChest(this);
 
-        const settings = this.add.image(this.scale.width - 16, 16, SETTINGS_GEAR_KEY)
-            .setOrigin(1, 0)
+        const settings = this.add.image(0, 0, SETTINGS_GEAR_KEY)
             .setDisplaySize(SETTINGS_GEAR_SIZE, SETTINGS_GEAR_SIZE)
             .setScrollFactor(0)
-            .setDepth(21)
-            .setInteractive({ useHandCursor: true });
+            .setDepth(23);
 
+        makeHudInteractive(settings);
         settings.setData('ui', true);
         settings.on('pointerover', () => settings.setTint(0xc4a882));
         settings.on('pointerout', () => settings.clearTint());
@@ -1570,17 +1574,12 @@ export class WorldScene extends Scene {
             this.openSettings();
         });
 
-        this.soundToggle = this.add.image(
-            settings.x - settings.displayWidth - 12,
-            16,
-            soundIconKey(isSoundOn())
-        )
-            .setOrigin(1, 0)
+        this.soundToggle = this.add.image(0, 0, soundIconKey(isSoundOn()))
             .setDisplaySize(SOUND_ICON_SIZE, SOUND_ICON_SIZE)
             .setScrollFactor(0)
-            .setDepth(21)
-            .setInteractive({ useHandCursor: true });
+            .setDepth(23);
 
+        makeHudInteractive(this.soundToggle);
         this.soundToggle.setData('ui', true);
         this.soundToggle.on('pointerover', () => this.soundToggle.setTint(0xc4a882));
         this.soundToggle.on('pointerout', () => this.soundToggle.clearTint());
@@ -1589,17 +1588,12 @@ export class WorldScene extends Scene {
             this.toggleSound();
         });
 
-        const chest = this.add.image(
-            this.soundToggle.x - this.soundToggle.displayWidth - 12,
-            16,
-            TREASURE_CHEST_KEY
-        )
-            .setOrigin(1, 0)
+        const chest = this.add.image(0, 0, TREASURE_CHEST_KEY)
             .setDisplaySize(TREASURE_CHEST_SIZE, TREASURE_CHEST_SIZE)
             .setScrollFactor(0)
-            .setDepth(21)
-            .setInteractive({ useHandCursor: true });
+            .setDepth(23);
 
+        makeHudInteractive(chest);
         chest.setData('ui', true);
         chest.on('pointerover', () => chest.setTint(0xc4a882));
         chest.on('pointerout', () => chest.clearTint());
@@ -1608,21 +1602,15 @@ export class WorldScene extends Scene {
             this.openTreasure();
         });
 
-        const cheat = this.add.text(
-            chest.x - chest.displayWidth - 12,
-            22,
-            'cheat',
-            {
-                fontFamily: 'Georgia, serif',
-                fontSize: '18px',
-                color: '#6b5344'
-            }
-        )
-            .setOrigin(1, 0)
+        const cheat = this.add.text(0, 0, 'cheat', {
+            fontFamily: 'Georgia, serif',
+            fontSize: '18px',
+            color: '#6b5344'
+        })
             .setScrollFactor(0)
-            .setDepth(21)
-            .setInteractive({ useHandCursor: true });
+            .setDepth(23);
 
+        makeHudInteractive(cheat);
         cheat.setData('ui', true);
         cheat.on('pointerover', () => cheat.setColor('#3d2c1e'));
         cheat.on('pointerout', () => cheat.setColor('#6b5344'));
@@ -1630,34 +1618,61 @@ export class WorldScene extends Scene {
             event.stopPropagation();
             this.openCheat();
         });
+
+        this.hudSettings = settings;
+        this.hudChest = chest;
+        this.hudCheat = cheat;
+        this.placeHudButtons();
+    }
+
+    private placeHudButtons (): void {
+        if (!this.hudSettings || !this.soundToggle || !this.hudChest || !this.hudCheat) {
+            return;
+        }
+
+        const { width, height } = this.scale;
+        const pad = chromePad();
+        const phone = isPhoneChrome();
+        const originY = phone ? 1 : 0;
+        const x = width - pad.right;
+        const y = phone ? height - pad.bottom : pad.top;
+        const cheatY = phone ? y - 6 : y + 6;
+
+        this.hudSettings.setOrigin(1, originY).setPosition(x, y);
+        this.soundToggle.setOrigin(1, originY).setPosition(
+            this.hudSettings.x - this.hudSettings.displayWidth - 12,
+            y
+        );
+        this.hudChest.setOrigin(1, originY).setPosition(
+            this.soundToggle.x - this.soundToggle.displayWidth - 12,
+            y
+        );
+        this.hudCheat.setOrigin(1, originY).setPosition(
+            this.hudChest.x - this.hudChest.displayWidth - 12,
+            cheatY
+        );
     }
 
     private layoutChrome (): void {
         const { width, height } = this.scale;
+        const pad = chromePad();
         this.nightVeil?.setSize(width, height);
         this.sleepVeil?.setSize(width, height);
-        this.hudSettings?.setPosition(width - 16, 16);
+        this.placeHudButtons();
 
-        if (this.soundToggle && this.hudSettings) {
-            this.soundToggle.setPosition(this.hudSettings.x - this.hudSettings.displayWidth - 12, 16);
+        if (this.cueText && this.cueText.originX === 0 && this.cueText.originY === 0) {
+            this.cueText.setPosition(pad.left, pad.top);
+            this.cueText.setStyle({ wordWrap: { width: this.cueWrapWidth() } });
         }
 
-        if (this.hudChest && this.soundToggle) {
-            this.hudChest.setPosition(this.soundToggle.x - this.soundToggle.displayWidth - 12, 16);
-        }
-
-        if (this.hudCheat && this.hudChest) {
-            this.hudCheat.setPosition(this.hudChest.x - this.hudChest.displayWidth - 12, 22);
-        }
-
-        this.cueText?.setStyle({ wordWrap: { width: this.cueWrapWidth() } });
         this.bandageButton?.layout();
         this.analogStick?.layout();
         this.analogStick?.setVisible(!this.wellDoneStarted);
     }
 
     private cueWrapWidth (): number {
-        return Math.max(200, this.scale.width - 220);
+        const reserved = isPhoneChrome() ? 40 : 220;
+        return Math.max(200, this.scale.width - reserved - chromePad().right);
     }
 
     private toggleSound (): void {
@@ -2149,11 +2164,21 @@ export class WorldScene extends Scene {
         if (this.scriptPlaying) {
             this.scriptPlaying = false;
 
+            if (this.flushPendingTreeVerse()) {
+                return;
+            }
+
             if (this.flushScriptQueue()) {
                 return;
             }
 
             this.showCue(this.flockCue(), false);
+        }
+
+        // Shade sit waits on speakCue onEnded; if speech died mid-verse, stand up.
+        if (this.treeResting || (this.shepherd.isSitting && this.treeVisit)) {
+            this.endShadeTreeRest();
+            return;
         }
 
         if (this.heardCorinthians && this.nightStarted && this.sleepVeil.alpha >= 0.75) {
@@ -2265,6 +2290,12 @@ export class WorldScene extends Scene {
         }
 
         this.nightAfterTree = true;
+
+        if (!this.foundTreeVerses.includes(verseId)) {
+            this.foundTreeVerses.push(verseId);
+            this.saveProgress(this.lastCheckpoint ?? 'found-gem');
+        }
+
         this.startShadeTreeRest(tree, verseId);
         return true;
     }
@@ -2974,8 +3005,15 @@ export class WorldScene extends Scene {
             return;
         }
 
+        this.foundTreeVerses.push(verseId);
+        this.saveProgress(this.lastCheckpoint ?? 'found-gem');
+        this.startShadeTreeRest(tree, verseId);
+    }
+
+    private startShadeTreeRest (tree: ShadeTree, verseId: string): void {
         this.treeVisit = tree;
         this.treePetFrom = { x: tree.x, y: tree.y };
+        this.treeResting = true;
         this.shepherd.sit();
         this.flock.forEach((sheep, slot) => {
             if (sheep.mood === 'following' && !sheep.hurt) {
@@ -2983,9 +3021,23 @@ export class WorldScene extends Scene {
                 sheep.beginRescueWait(gather.x, gather.y);
             }
         });
-        this.foundTreeVerses.push(verseId);
-        this.saveProgress(this.lastCheckpoint ?? 'found-gem');
         this.beginTreeVerse(verseId);
+    }
+
+    private endShadeTreeRest (): void {
+        this.treeResting = false;
+        this.pendingTreeVerseId = null;
+        this.shepherd.standUp();
+        this.shepherd.clearGuidance();
+
+        for (const sheep of this.flock) {
+            sheep.endRescueWait();
+        }
+
+        if (this.nightAfterTree && !this.nightStarted) {
+            this.nightAfterTree = false;
+            this.beginNight();
+        }
     }
 
     private beginTreeVerse (verseId: string): void {
@@ -3010,17 +3062,13 @@ export class WorldScene extends Scene {
 
     private speakTreeVerse (verseId: string): void {
         this.pendingTreeVerseId = null;
+        this.treeResting = true;
         this.playLines([treeVerseLine(verseId)], () => {
             if (!this.sys.isActive()) {
                 return;
             }
 
-            this.shepherd.standUp();
-            this.shepherd.clearGuidance();
-
-            for (const sheep of this.flock) {
-                sheep.endRescueWait();
-            }
+            this.endShadeTreeRest();
         });
     }
 
@@ -3202,6 +3250,7 @@ export class WorldScene extends Scene {
             sheep.snack = true;
             sheep.changed = true;
         }
+        
     }
 
     private bloomThorns (): void {
@@ -3261,7 +3310,7 @@ export class WorldScene extends Scene {
                 padding: { x: 10, y: 6 },
                 wordWrap: { width: this.cueWrapWidth() }
             })
-            .setPosition(16, 16)
+            .setPosition(chromePad().left, chromePad().top)
             .setOrigin(0, 0);
     }
 

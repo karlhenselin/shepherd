@@ -7,7 +7,7 @@ export const FOLLOW_SPEED = 150 * 0.95 * 0.95;
 /** After 1 Corinthians 15:51, the sheep keep up a little better. */
 const CHANGED_FOLLOW_SCALE = 1.18;
 const NOTICE_DISTANCE = 110;
-export const FOLLOW_DISTANCE = 64;
+export const FOLLOW_DISTANCE = 70;
 const NIGHT_FOLLOW_DISTANCE = 41;
 /** Side-by-side spread along the trail (perpendicular to travel). */
 const FOLLOW_LATERAL = 28;
@@ -167,7 +167,7 @@ export class Sheep {
             this.shadow.setDisplaySize(27, 11);
         }else if(this.name === 'Leo' || this.name === 'Sarah'){
             this.shadow.setDisplaySize(60, 24);
-            this.shadowOffset = 5;
+            this.shadowOffset = 4;
         }
 
         const texture = flockTextureKey(this.name);
@@ -778,7 +778,7 @@ export class Sheep {
      * sheep don't stack on one trail spot (slot 0 dead-center behind).
      */
     private trailTarget (shepherd: Shepherd, huddle: boolean): { targetX: number; targetY: number } {
-        const spacing = (huddle ? NIGHT_FOLLOW_DISTANCE : FOLLOW_DISTANCE) * traitsFor(this.name).trailScale;
+        const spacing = (huddle && !this.changed ? NIGHT_FOLLOW_DISTANCE : this.changed? FOLLOW_DISTANCE + 15 : FOLLOW_DISTANCE) * traitsFor(this.name).trailScale;
         const { x: hx, y: hy } = shepherd.moveHeading;
         const behindX = -hx;
         const behindY = -hy;

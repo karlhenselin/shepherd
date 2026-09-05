@@ -116,7 +116,9 @@ export function hushSpeech (): void {
     }
 
     hushed = true;
-    clearSafety();
+    // Keep the safety timer — if TTS was the fallback, cancelBrowserSpeech()
+    // below leaves no clip to resume, and without safety the line never ends
+    // (shade sits / picnic stay knelt forever).
     currentClip?.pause();
     cancelBrowserSpeech();
 }
@@ -132,6 +134,18 @@ export function unhushSpeech (): void {
     const clip = currentClip;
 
     if (!clip) {
+        // Clip already failed over to browser TTS (cancelled above), or never
+        // started. Replay the line so onEnded callbacks are not orphaned.
+        if (activeText.length > 0) {
+            speakCue(activeText, activeOnEnded);
+        }
+        else if (activeOnEnded) {
+            const onEnded = activeOnEnded;
+            activeText = '';
+            activeOnEnded = undefined;
+            onEnded();
+        }
+
         return;
     }
 

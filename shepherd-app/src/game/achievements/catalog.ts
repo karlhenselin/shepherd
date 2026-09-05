@@ -22,7 +22,8 @@ export const ACHIEVEMENT_IDS = [
     'gem_collector',
     'bible_treasure_hunter',
     'living_water',
-    'under_the_shade'
+    'under_the_shade',
+    'well_done'
 ] as const;
 
 export type AchievementId = typeof ACHIEVEMENT_IDS[number];
@@ -123,6 +124,11 @@ export const ACHIEVEMENTS: AchievementDef[] = [
         id: 'under_the_shade',
         title: 'Under the Shade',
         earned: (save) => (save.foundTreeVerses?.length ?? 0) >= TREE_VERSES.length
+    },
+    {
+        id: 'well_done',
+        title: 'Well Done',
+        earned: (save) => save.sawWellDone === true
     }
 ];
 
@@ -148,9 +154,14 @@ export const ANDROID_ACHIEVEMENT_IDS: Record<AchievementId, string> = {
     gem_collector: '',
     bible_treasure_hunter: '',
     living_water: '',
-    under_the_shade: ''
+    under_the_shade: '',
+    well_done: ''
 };
 
 export function earnedAchievements (save: GameSave): AchievementId[] {
+    if (save.achievementsDisabled) {
+        return [];
+    }
+
     return ACHIEVEMENTS.filter((item) => item.earned(save)).map((item) => item.id);
 }
