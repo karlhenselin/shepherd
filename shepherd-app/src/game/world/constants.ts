@@ -74,30 +74,54 @@ export function findPointAwayFromAll (
         }
     }
 
-    return {
-        x: clamp(origin.x + minFromOrigin, pad, WORLD_WIDTH - pad),
-        y: clamp(origin.y, pad, WORLD_HEIGHT - pad)
-    };
+    // Prefer a mid-map point over an edge clamp that can land on a corner landmark.
+    let best = { x: WORLD_WIDTH * 0.5, y: WORLD_HEIGHT * 0.5 };
+    let bestScore = -1;
+
+    for (let i = 0; i < 16; i++) {
+        const angle = (i / 16) * Math.PI * 2;
+        const candidate = {
+            x: clamp(origin.x + Math.cos(angle) * minFromOrigin, pad, WORLD_WIDTH - pad),
+            y: clamp(origin.y + Math.sin(angle) * minFromOrigin, pad, WORLD_HEIGHT - pad)
+        };
+        const score = points.reduce(
+            (sum, point) => sum + Math.hypot(point.x - candidate.x, point.y - candidate.y),
+            0
+        );
+
+        if (score > bestScore) {
+            bestScore = score;
+            best = candidate;
+        }
+    }
+
+    return best;
 }
 
-/** Sheepfold corner: farthest from the map start. */
+const LANDMARK_PAD_X = 320;
+const LANDMARK_PAD_Y = 260;
+
+/** Sheepfold: always the west (left) side of the map. */
 export function defaultPenSpot (): { x: number; y: number } {
-    return farthestCornerFrom(startCenter());
+    return { x: LANDMARK_PAD_X, y: LANDMARK_PAD_Y };
 }
 
-/** New Jerusalem: the corner opposite the pen. */
+/** New Jerusalem: always the east (right) side of the map. */
 export function defaultCitySpot (): { x: number; y: number } {
-    return farthestCornerFrom(defaultPenSpot());
+    return { x: WORLD_WIDTH - LANDMARK_PAD_X, y: WORLD_HEIGHT - LANDMARK_PAD_Y };
+}
+
+/** True when a saved pen sits on the right half (legacy / overlap saves). */
+export function penSpotOnLeft (point: { x: number; y: number }): boolean {
+    return point.x < WORLD_WIDTH * 0.5;
 }
 
 export function farthestCornerFrom (point: { x: number; y: number }): { x: number; y: number } {
-    const padX = 320;
-    const padY = 260;
     const corners = [
-        { x: padX, y: padY },
-        { x: WORLD_WIDTH - padX, y: padY },
-        { x: padX, y: WORLD_HEIGHT - padY },
-        { x: WORLD_WIDTH - padX, y: WORLD_HEIGHT - padY }
+        { x: LANDMARK_PAD_X, y: LANDMARK_PAD_Y },
+        { x: WORLD_WIDTH - LANDMARK_PAD_X, y: LANDMARK_PAD_Y },
+        { x: LANDMARK_PAD_X, y: WORLD_HEIGHT - LANDMARK_PAD_Y },
+        { x: WORLD_WIDTH - LANDMARK_PAD_X, y: WORLD_HEIGHT - LANDMARK_PAD_Y }
     ];
     let best = corners[0];
     let bestDist = -1;

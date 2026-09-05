@@ -3,7 +3,7 @@ import { PASTURE_COL, PASTURE_ROW, regionCenter } from './constants';
 
 const DISPLAY_SIZE = 56;
 /** Hungry sheep peel off the trail to walk to a tuft once this close. */
-export const GRASS_APPROACH_RANGE = 180;
+export const GRASS_APPROACH_RANGE = 260;
 /** Stand this close to the plant before chewing. */
 export const GRASS_EAT_ARRIVE = 16;
 /** After the change, eaten tufts grow back this long after a nibble. */
@@ -54,6 +54,17 @@ export class GrassPatch {
     /** Reserve this tuft so a second sheep walks to a different plant. */
     claim (): void {
         this.claimed = true;
+    }
+
+    /** Free a reserved tuft if a meal was interrupted before markEaten. */
+    release (): void {
+        if (this.eaten) {
+            return;
+        }
+
+        this.claimed = false;
+        this.eatStage = 0;
+        this.applyTexture('grass-tuft');
     }
 
     /**

@@ -1,7 +1,7 @@
 import { BIBLE_GEMS } from '../data/scripture';
 import { TREE_VERSES } from '../data/treeVerses';
 import { WATER_VERSES } from '../data/waterVerses';
-import { defaultCitySpot, farthestCornerFrom, PASTURE_COL, PASTURE_ROW, regionCenter, startCenter, WATER_COL, WATER_ROW } from '../world/constants';
+import { defaultCitySpot, defaultPenSpot, PASTURE_COL, PASTURE_ROW, regionCenter, startCenter, WATER_COL, WATER_ROW } from '../world/constants';
 import { CITY_APPROACH_Y } from '../world/Jerusalem';
 import { GameSave, StoryCheckpoint } from './gameSave';
 
@@ -162,8 +162,7 @@ function psalm233b (): GameSave {
 }
 
 function atPen (checkpoint: StoryCheckpoint, extra: Partial<GameSave> = {}): GameSave {
-    const start = startCenter();
-    const pen = farthestCornerFrom(start);
+    const pen = defaultPenSpot();
 
     return afterRescue(checkpoint, {
         heardPsalm3b: true,

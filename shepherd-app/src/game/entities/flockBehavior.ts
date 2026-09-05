@@ -230,10 +230,10 @@ export class FlockBehavior {
     }
 
     beginFollowing (): void {
+        this.abortEating();
         this.discovered = true;
         this.mood = 'following';
         this.rescueWait = null;
-        this.eatPatch = null;
         this.drinkSpot = null;
         this.penPath = [];
         this.penTarget = null;
@@ -884,9 +884,15 @@ export class FlockBehavior {
         }
     }
 
+    /** True while peeling off the trail toward a tuft (not yet chewing). */
+    get isWalkingToEat (): boolean {
+        return this.eatPatch !== null && this.mood === 'following';
+    }
+
     /** Walk up to an uneaten tuft, then chew. */
     private tickHunger (grass: GrassPatch[], now: number): 'ate' | 'walking' | null {
-        if (now < this.nextSnackAt) {
+        // Story hunger ignores snack cooldown; casual nibbles wait it out.
+        if (!this.hungry && now < this.nextSnackAt) {
             return null;
         }
 
@@ -941,14 +947,27 @@ export class FlockBehavior {
         this.thirsty = true;
         this.drinkSpot = { x, y };
         this.drinkFaceX = faceX;
-        this.eatPatch = null;
+        this.abortEating();
 
-        if (this.mood === 'eating' || this.mood === 'drinking') {
+        if (this.mood === 'drinking') {
             this.mood = 'following';
             this.sprite.setAngle(0);
         }
 
         this.body.setImmovable(false);
+    }
+
+    /** Drop a reserved tuft and leave chewing without marking it eaten. */
+    private abortEating (): void {
+        if (this.eatPatch) {
+            this.eatPatch.release();
+            this.eatPatch = null;
+        }
+
+        if (this.mood === 'eating') {
+            this.mood = 'following';
+            this.sprite.setAngle(0);
+        }
     }
 
     private tickThirst (now: number): 'walking' | null {
