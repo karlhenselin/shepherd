@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">Shepherd</string>
     <string name="title_activity_main">Shepherd</string>
-    <string name="package_name">com.karlhenselin.shepherd</string>
-    <string name="custom_url_scheme">com.karlhenselin.shepherd</string>
+    <string name="package_name">com.petraguardsoftware.shepherd</string>
+    <string name="custom_url_scheme">com.petraguardsoftware.shepherd</string>
 </resources>

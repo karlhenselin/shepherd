@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "com.karlhenselin.shepherd"
+    namespace = "com.petraguardsoftware.shepherd"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.karlhenselin.shepherd"
+        applicationId "com.petraguardsoftware.shepherd"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.karlhenselin.shepherd',
+  appId: 'com.petraguardsoftware.shepherd',
   appName: 'Shepherd',
   webDir: 'dist',
   plugins: {
