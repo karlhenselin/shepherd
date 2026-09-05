@@ -2,7 +2,8 @@ import { Scene, GameObjects, Geom, Scenes } from 'phaser';
 import { Shepherd } from '../entities/Shepherd';
 import { Wolf, WOLF_ATTACK_RANGE } from '../entities/Wolf';
 import { Lion } from '../entities/Lion';
-import { FOLLOW_DISTANCE, FOLLOW_SPEED, PET_DANCE_MS, Sheep } from '../entities/Sheep';
+import { FOLLOW_DISTANCE, FOLLOW_SPEED, PET_DANCE_MS, FlockBehavior } from '../entities/flockBehavior';
+import { Sheep } from '../entities/Sheep';
 import {
     findPointAwayFromAll,
     GOAL_WALK_MIN,
@@ -193,7 +194,7 @@ function petLinesFor (name: string): Array<(name: string) => string> {
 
 export class WorldScene extends Scene {
     private shepherd!: Shepherd;
-    private flock: Sheep[] = [];
+    private flock: FlockBehavior[] = [];
     private grass: GrassPatch[] = [];
     private water: WaterSource[] = [];
     private trees: ShadeTree[] = [];
@@ -257,7 +258,7 @@ export class WorldScene extends Scene {
     /** Finish the current shade sit before darkening the world. */
     private nightAfterTree = false;
     private strayReadyAt = 0;
-    private lagWarned = new WeakSet<Sheep>();
+    private lagWarned = new WeakSet<FlockBehavior>();
     private lostHint!: LostSheepHint;
     private gemHint!: BibleGemHint;
     private lastGoldStone: { x: number; y: number } | null = null;
@@ -611,7 +612,7 @@ export class WorldScene extends Scene {
         }
     }
 
-    private startPetting (sheep: Sheep): void {
+    private startPetting (sheep: FlockBehavior): void {
         // No kneel / pet / dance at night (walk-into or find celebration).
         if (this.nightStarted) {
             return;
@@ -638,7 +639,7 @@ export class WorldScene extends Scene {
      * Find / stray-rejoin celebration: same kneel + baah + dance as walk-into petting.
      * Bypasses pet cooldown and scriptPlaying (speech can run alongside).
      */
-    private celebrateFinding (sheep: Sheep): void {
+    private celebrateFinding (sheep: FlockBehavior): void {
         if (this.shepherd.isLyingDown || sheep.hurt || sheep.isBusy || this.isNearHole()) {
             return;
         }
@@ -646,7 +647,7 @@ export class WorldScene extends Scene {
         this.startPetting(sheep);
     }
 
-    private onFoundSheep (sheep: Sheep): void {
+    private onFoundSheep (sheep: FlockBehavior): void {
         this.foundCount += 1;
         this.saveProgress(sheep.hurt ? 'hurt-sheep' : 'found-sheep');
         this.celebrateFinding(sheep);
@@ -696,7 +697,7 @@ export class WorldScene extends Scene {
         });
     }
 
-    private onFoundPeaceable (sheep: Sheep): void {
+    private onFoundPeaceable (sheep: FlockBehavior): void {
         this.saveProgress('found-sheep');
         this.celebrateFinding(sheep);
         sheep.snack = true;
@@ -720,7 +721,7 @@ export class WorldScene extends Scene {
         });
     }
 
-    private onAte (_sheep: Sheep): void {
+    private onAte (_sheep: FlockBehavior): void {
         if (this.heardPsalm2) {
             return;
         }
@@ -734,7 +735,7 @@ export class WorldScene extends Scene {
         });
     }
 
-    private onDrank (_sheep: Sheep): void {
+    private onDrank (_sheep: FlockBehavior): void {
         if (this.drinkCuePlayed) {
             return;
         }
@@ -1379,8 +1380,7 @@ export class WorldScene extends Scene {
 
         save.foundNames.forEach((name, slot) => {
             const angle = (slot / Math.max(save.foundNames.length, 1)) * Math.PI * 2;
-            const sheep = new Sheep(
-                this,
+            const sheep = this.createFlockMember(
                 this.shepherd.sprite.x + Math.cos(angle) * RESTORE_FOLLOW_RING,
                 this.shepherd.sprite.y + Math.sin(angle) * RESTORE_FOLLOW_RING,
                 name,
@@ -1789,7 +1789,7 @@ export class WorldScene extends Scene {
     }
 
     /** Wolf or thorn rescue can start while a verse is still speaking. */
-    private scriptBlocksBandage (hurt: Sheep): boolean {
+    private scriptBlocksBandage (hurt: FlockBehavior): boolean {
         return this.scriptPlaying && !hurt.hurtByWolf && !hurt.snaredInThorns;
     }
 
@@ -1810,7 +1810,7 @@ export class WorldScene extends Scene {
         }
     }
 
-    private rescueFromWolf (hurt: Sheep): void {
+    private rescueFromWolf (hurt: FlockBehavior): void {
         this.bandageRescuing = true;
         this.bandageButton.setVisible(false);
         this.stageFlockAside(hurt.sprite.x, hurt.sprite.y, hurt);
@@ -1841,7 +1841,7 @@ export class WorldScene extends Scene {
         });
     }
 
-    private rescueFromThorns (hurt: Sheep): void {
+    private rescueFromThorns (hurt: FlockBehavior): void {
         this.bandageRescuing = true;
         this.bandageButton.setVisible(false);
         this.stageFlockAside(hurt.sprite.x, hurt.sprite.y, hurt);
@@ -1883,7 +1883,7 @@ export class WorldScene extends Scene {
     }
 
     /** Stand just outside the bramble so the shepherd never has to enter it. */
-    private thornRescueStand (hurt: Sheep): { x: number; y: number } {
+    private thornRescueStand (hurt: FlockBehavior): { x: number; y: number } {
         const patch = this.nearestThorn(hurt.sprite.x, hurt.sprite.y);
         const fromX = this.shepherd.sprite.x;
         const fromY = this.shepherd.sprite.y;
@@ -1987,7 +1987,7 @@ export class WorldScene extends Scene {
     }
 
     /** Following sheep sit off to the side of the hole while the shepherd helps. */
-    private stageFlockAside (holeX: number, holeY: number, hurt: Sheep): void {
+    private stageFlockAside (holeX: number, holeY: number, hurt: FlockBehavior): void {
         const followers = this.flock.filter(
             (sheep) => sheep !== hurt && sheep.mood === 'following' && !sheep.hurt
         );
@@ -2006,7 +2006,7 @@ export class WorldScene extends Scene {
     }
 
     /** After the pit bandage, sit with the waiting flock instead of trail-following into the keep-out. */
-    private parkHealedByFlock (healed: Sheep, holeX: number, holeY: number): void {
+    private parkHealedByFlock (healed: FlockBehavior, holeX: number, holeY: number): void {
         const aside = this.shepherd.sprite.x < holeX ? -1 : 1;
         const waiting = this.flock.filter((sheep) => sheep !== healed && sheep.isRescueWaiting);
         const spread = waiting.length === 0
@@ -2055,7 +2055,7 @@ export class WorldScene extends Scene {
     }
 
     /** Hurt sheep the bandage button targets — wolf victims first. */
-    private hurtNeedingBandage (): Sheep | undefined {
+    private hurtNeedingBandage (): FlockBehavior | undefined {
         const hurt = this.flock.filter((sheep) => sheep.hurt && sheep.discovered);
 
         if (hurt.length === 0) {
@@ -3143,8 +3143,13 @@ export class WorldScene extends Scene {
         const wake = fold.wakeSpot();
         this.shepherd.placeAt(wake.x, wake.y);
         this.shepherd.faceToward(wake.x, wake.y + 80);
-        this.flock.forEach((sheep, slot) => {
-            const exit = fold.exitSpot(slot);
+        let exitSlot = 0;
+        this.flock.forEach((sheep) => {
+            if (this.isUndiscoveredWaiter(sheep)) {
+                return;
+            }
+
+            const exit = fold.exitSpot(exitSlot++);
             sheep.leavePen(exit.x, exit.y);
             sheep.deferWalkIntoPetting(PETTING_SUPPRESS_MS);
         });
@@ -3156,8 +3161,9 @@ export class WorldScene extends Scene {
         this.shepherd.placeAt(x, y);
         this.shepherd.faceToward(x, y - 80);
         this.cameras.main.centerOn(x, y);
-        this.flock.forEach((sheep, slot) => {
-            const angle = (slot / Math.max(this.flock.length, 1)) * Math.PI * 2;
+        const party = this.flock.filter((sheep) => !this.isUndiscoveredWaiter(sheep));
+        party.forEach((sheep, slot) => {
+            const angle = (slot / Math.max(party.length, 1)) * Math.PI * 2;
             sheep.leavePen(
                 x + Math.cos(angle) * RESTORE_FOLLOW_RING,
                 y + Math.sin(angle) * RESTORE_FOLLOW_RING
@@ -3166,6 +3172,11 @@ export class WorldScene extends Scene {
         });
         this.loadPetsLocked = true;
         this.petUnlockOrigin = { x, y };
+    }
+
+    /** Lost / peaceable hunt targets still out in the world — dawn must not recruit them. */
+    private isUndiscoveredWaiter (sheep: FlockBehavior): boolean {
+        return (sheep.mood === 'waiting' || sheep.mood === 'hurt') && !sheep.discovered;
     }
 
     private beginMystery (): void {
@@ -3457,6 +3468,18 @@ export class WorldScene extends Scene {
         startWorldMusic(this);
     }
 
+    private createFlockMember (x: number, y: number, name: string, slot: number): FlockBehavior {
+        if (name === 'Leo' || name === 'Lion') {
+            return Lion.joinFlock(this, x, y, slot);
+        }
+
+        if (name === 'Sarah' || name === 'Wolf') {
+            return Wolf.joinFlock(this, x, y, slot);
+        }
+
+        return new Sheep(this, x, y, name, slot);
+    }
+
     private spawnSheep (name: string, slot: number): void {
         const placed = [
             { x: this.shepherd.sprite.x, y: this.shepherd.sprite.y },
@@ -3471,14 +3494,14 @@ export class WorldScene extends Scene {
 
         if (name === 'Biscuit' && !this.heardPsalm3) {
             this.hole = new Hole(this, spawn.x, spawn.y);
-            const trapped = new Sheep(this, spawn.x, spawn.y + 10, name, slot);
+            const trapped = this.createFlockMember(spawn.x, spawn.y + 10, name, slot);
             trapped.trapInHole();
             trapped.changed = this.heardCorinthians;
             this.flock.push(trapped);
             return;
         }
 
-        const sheep = new Sheep(this, spawn.x, spawn.y, name, slot);
+        const sheep = this.createFlockMember(spawn.x, spawn.y, name, slot);
         sheep.changed = this.heardCorinthians;
         this.flock.push(sheep);
     }

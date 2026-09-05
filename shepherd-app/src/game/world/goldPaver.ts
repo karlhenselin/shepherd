@@ -1,4 +1,4 @@
-import { GameObjects, Scene } from 'phaser';
+import { GameObjects, Math as PMath, Scene } from 'phaser';
 import { WORLD_HEIGHT, WORLD_WIDTH } from './constants';
 
 const TEXTURE_KEYS = ['gold-paver-0', 'gold-paver-1', 'gold-paver-2'] as const;
@@ -161,8 +161,8 @@ function paintPaver (scene: Scene, key: string, points: number[][]): void {
     g.destroy();
 }
 
-function toPoints (points: number[][], dx = 0, dy = 0): { x: number; y: number }[] {
-    return points.map(([x, y]) => ({ x: x + dx, y: y + dy }));
+function toPoints (points: number[][], dx = 0, dy = 0): PMath.Vector2[] {
+    return points.map(([x, y]) => new PMath.Vector2(x + dx, y + dy));
 }
 
 function clamp (value: number, min: number, max: number): number {

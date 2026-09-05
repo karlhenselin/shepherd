@@ -1,13 +1,37 @@
 import { GameObjects, Scene, Geom } from 'phaser';
 import { characterDepth } from '../world/constants';
+import { FlockAppearance, FlockBehavior } from './flockBehavior';
 
 const TEXTURE_KEY = 'lion';
-const SHADOW_KEY = 'wolf-shadow';
+const SHADOW_KEY = 'lion-shadow';
 const SIZE = 56;
 const SHADOW_OFFSET = 18;
 const WALK_PHASE_SPEED = 0.012;
 const MOVE_THRESHOLD = 0.35;
 const WALK_BOB_DEG = 5;
+const FLOCK_SIZE = 48;
+const FLOCK_SHADOW_OFFSET = 4;
+
+function lionFlockAppearance (): FlockAppearance {
+    return {
+        textureKey: TEXTURE_KEY,
+        shadowKey: SHADOW_KEY,
+        displayHeight: FLOCK_SIZE,
+        fitAspect: true,
+        originY: 0.72,
+        shadowOffset: FLOCK_SHADOW_OFFSET,
+        shadowDisplaySize: { width: 60, height: 24 },
+        shadowTiltDeg: 7,
+        traits: {
+            followSpeed: 1.36,
+            trailScale: 0.72,
+            strayWeight: 0,
+            waddleDeg: 4.5,
+            waddlePeriod: 94,
+            waddlePhase: 3.3
+        }
+    };
+}
 
 /**
  * Gate-sleep cinematic: charges in from off-screen west and drives the
@@ -22,6 +46,13 @@ export class Lion {
     private walkPhase = 0;
     private lastX = 0;
     private lastY = 0;
+
+    /** Peaceable Leo — same lion art, flock physics and follow AI. */
+    static joinFlock (scene: Scene, x: number, y: number, slot: number): FlockBehavior {
+        ensureLionTexture(scene);
+        ensureLionShadow(scene);
+        return new FlockBehavior(scene, x, y, 'Leo', slot, lionFlockAppearance(), true);
+    }
 
     constructor (scene: Scene, x: number, y: number) {
         ensureLionTexture(scene);

@@ -1,6 +1,6 @@
 import { Scene, GameObjects, Physics, Input, Math as PMath } from 'phaser';
 import { characterDepth } from '../world/constants';
-import { KeepOutZone, pushOutsideKeepOuts } from './Sheep';
+import { KeepOutZone, pushOutsideKeepOuts } from './flockBehavior';
 
 const SPEED = 180;
 const ARRIVE_DISTANCE = 8;

@@ -1,6 +1,7 @@
 import { GameObjects, Scene, Geom } from 'phaser';
 import { characterDepth, WORLD_HEIGHT, WORLD_WIDTH } from '../world/constants';
 import { Shepherd } from './Shepherd';
+import { FlockAppearance, FlockBehavior } from './flockBehavior';
 
 const TEXTURE_KEY = 'wolf';
 const SHADOW_KEY = 'wolf-shadow';
@@ -28,8 +29,31 @@ const PAD = 80;
 const WALK_PHASE_SPEED = 0.012;
 const MOVE_THRESHOLD = 0.35;
 const WALK_BOB_DEG = 5;
+const FLOCK_SIZE = 48;
+const FLOCK_SHADOW_OFFSET = 4;
 
 type WolfMode = 'orbit' | 'retreat' | 'hunt';
+
+function wolfFlockAppearance (): FlockAppearance {
+    return {
+        textureKey: TEXTURE_KEY,
+        shadowKey: SHADOW_KEY,
+        displayHeight: FLOCK_SIZE,
+        fitAspect: true,
+        originY: 0.72,
+        shadowOffset: FLOCK_SHADOW_OFFSET,
+        shadowDisplaySize: { width: 60, height: 24 },
+        shadowTiltDeg: 7,
+        traits: {
+            followSpeed: 1.36,
+            trailScale: 0.72,
+            strayWeight: 0,
+            waddleDeg: 4,
+            waddlePeriod: 86,
+            waddlePhase: 1.1
+        }
+    };
+}
 
 /**
  * Night glimpse — heard, not fought. Circles the flock at a distance and
@@ -53,6 +77,13 @@ export class Wolf {
     private walkPhase = 0;
     private lastX = 0;
     private lastY = 0;
+
+    /** Peaceable Sarah — same wolf art, flock physics and follow AI. */
+    static joinFlock (scene: Scene, x: number, y: number, slot: number): FlockBehavior {
+        ensureWolfTexture(scene);
+        ensureWolfShadow(scene);
+        return new FlockBehavior(scene, x, y, 'Sarah', slot, wolfFlockAppearance(), true);
+    }
 
     constructor (scene: Scene, aroundX: number, aroundY: number) {
         ensureWolfTexture(scene);

@@ -1,5 +1,5 @@
 import { Scene, Sound } from 'phaser';
-import { Sheep } from '../entities/Sheep';
+import { FlockBehavior } from '../entities/flockBehavior';
 import { isDocumentAudioLive, isSoundOn } from './soundPref';
 import { playFriendlyLionRoar } from './lionRoar';
 import { playFriendlyHowl } from './howl';
@@ -36,7 +36,7 @@ export type NightBaahContext = {
     fold: { x: number; y: number } | null;
 };
 
-const nextBleatAt = new WeakMap<Sheep, number>();
+const nextBleatAt = new WeakMap<FlockBehavior, number>();
 let lastCalmBleatAt = 0;
 let flockAnswerUntil = 0;
 let nextNightBaahAt = 0;
@@ -49,7 +49,7 @@ export function loadSheepSounds (load: Phaser.Loader.LoaderPlugin): void {
     }
 }
 
-export function tickSheepSounds (scene: Scene, flock: Sheep[], listener: { x: number; y: number }, night = false): void {
+export function tickSheepSounds (scene: Scene, flock: FlockBehavior[], listener: { x: number; y: number }, night = false): void {
     const now = scene.time.now;
 
     if (!canPlayBleats(scene)) {
@@ -74,7 +74,7 @@ export function tickSheepSounds (scene: Scene, flock: Sheep[], listener: { x: nu
 
 export function tickNightBaahs (
     scene: Scene,
-    flock: Sheep[],
+    flock: FlockBehavior[],
     listener: { x: number; y: number },
     night: NightBaahContext | null
 ): void {
@@ -130,7 +130,7 @@ export function tickNightBaahs (
     nextNightBaahAt = now + nextNightDelay(sheep, night, scared);
 }
 
-export function cueWaitingBleat (sheep: Sheep, now: number): void {
+export function cueWaitingBleat (sheep: FlockBehavior, now: number): void {
     lastCalmBleatAt = Math.min(lastCalmBleatAt, now - CALM_GAP_MS);
     nextBleatAt.set(sheep, now + 800 + Math.random() * 1600);
 }
@@ -139,7 +139,7 @@ export function cueWaitingBleat (sheep: Sheep, now: number): void {
  * Warning baah while a follower is falling behind (before teleport).
  * Higher pitch (cents) and volume so it reads as "getting farther."
  */
-export function playLaggingBaah (scene: Scene, sheep: Sheep, listener: { x: number; y: number }): boolean {
+export function playLaggingBaah (scene: Scene, sheep: FlockBehavior, listener: { x: number; y: number }): boolean {
     if (!canPlayBleats(scene)) {
         return false;
     }
@@ -173,7 +173,7 @@ export function playLaggingBaah (scene: Scene, sheep: Sheep, listener: { x: numb
  * Stereo-panned toward the teleport destination; volume fades out during the clip
  * so it sounds like the sheep is going farther away.
  */
-export function playStrayBaah (scene: Scene, sheep: Sheep, listener: { x: number; y: number }): boolean {
+export function playStrayBaah (scene: Scene, sheep: FlockBehavior, listener: { x: number; y: number }): boolean {
     if (!canPlayBleats(scene)) {
         return false;
     }
@@ -242,7 +242,7 @@ export function playStrayBaah (scene: Scene, sheep: Sheep, listener: { x: number
 }
 
 /** Soft happy baah when the shepherd pets a sheep. Leo roars; Sarah howls. */
-export function playHappyBaah (scene: Scene, sheep: Sheep, listener: { x: number; y: number }): boolean {
+export function playHappyBaah (scene: Scene, sheep: FlockBehavior, listener: { x: number; y: number }): boolean {
     if (sheep.name === 'Leo') {
         return playFriendlyLionRoar(scene, sheep, listener);
     }
@@ -319,7 +319,7 @@ function canPlayBleats (scene: Scene): boolean {
     return true;
 }
 
-function postponeBleats (flock: Sheep[], now: number): void {
+function postponeBleats (flock: FlockBehavior[], now: number): void {
     lastCalmBleatAt = now;
     nextNightBaahAt = now + 3500 + Math.random() * 4500;
 
@@ -328,7 +328,7 @@ function postponeBleats (flock: Sheep[], now: number): void {
     }
 }
 
-function maybeBleat (scene: Scene, sheep: Sheep, flock: Sheep[], listener: { x: number; y: number }, now: number): void {
+function maybeBleat (scene: Scene, sheep: FlockBehavior, flock: FlockBehavior[], listener: { x: number; y: number }, now: number): void {
     if (!shouldBleat(sheep)) {
         nextBleatAt.set(sheep, now + delayFor(sheep));
         return;
@@ -365,7 +365,7 @@ function maybeBleat (scene: Scene, sheep: Sheep, flock: Sheep[], listener: { x: 
     nextBleatAt.set(sheep, now + delayFor(sheep));
 }
 
-function shouldBleat (sheep: Sheep): boolean {
+function shouldBleat (sheep: FlockBehavior): boolean {
     if (sheep.peaceable) {
         return false;
     }
@@ -373,7 +373,7 @@ function shouldBleat (sheep: Sheep): boolean {
     return sheep.mood !== 'penned' && sheep.mood !== 'eating' && sheep.mood !== 'drinking';
 }
 
-function firstDelayFor (sheep: Sheep): number {
+function firstDelayFor (sheep: FlockBehavior): number {
     if (sheep.hurt) {
         return 280 + Math.random() * 720;
     }
@@ -389,7 +389,7 @@ function firstDelayFor (sheep: Sheep): number {
     return 8000 + Math.random() * 14000;
 }
 
-function delayFor (sheep: Sheep): number {
+function delayFor (sheep: FlockBehavior): number {
     if (sheep.hurt) {
         return 2200 + Math.random() * 2300;
     }
@@ -405,11 +405,11 @@ function delayFor (sheep: Sheep): number {
     return 22000 + Math.random() * 18000;
 }
 
-function isHappyFollower (sheep: Sheep): boolean {
+function isHappyFollower (sheep: FlockBehavior): boolean {
     return sheep.mood === 'following' && !sheep.hurt && !sheep.peaceable;
 }
 
-function maybeCueFlockAnswer (flock: Sheep[], speaker: Sheep, now: number): void {
+function maybeCueFlockAnswer (flock: FlockBehavior[], speaker: FlockBehavior, now: number): void {
     if (!isHappyFollower(speaker) || Math.random() > 0.4) {
         return;
     }
@@ -425,7 +425,7 @@ function maybeCueFlockAnswer (flock: Sheep[], speaker: Sheep, now: number): void
     flockAnswerUntil = now + 1200;
 }
 
-function playBleat (scene: Scene, sheep: Sheep, listener: { x: number; y: number }): boolean {
+function playBleat (scene: Scene, sheep: FlockBehavior, listener: { x: number; y: number }): boolean {
     const settings = bleatSettings(scene, sheep, listener);
 
     if ((settings.volume ?? 0) < 0.012) {
@@ -445,7 +445,7 @@ function playBleat (scene: Scene, sheep: Sheep, listener: { x: number; y: number
     return scene.sound.play(key, settings);
 }
 
-function pickNightSheep (flock: Sheep[]): Sheep | null {
+function pickNightSheep (flock: FlockBehavior[]): FlockBehavior | null {
     const eligible = flock.filter((sheep) => !sheep.hurt && !sheep.isBusy && !sheep.peaceable);
 
     if (eligible.length === 0) {
@@ -458,7 +458,7 @@ function pickNightSheep (flock: Sheep[]): Sheep | null {
     return pool[Math.floor(Math.random() * pool.length)];
 }
 
-function rollScaredBaah (sheep: Sheep, night: NightBaahContext): boolean {
+function rollScaredBaah (sheep: FlockBehavior, night: NightBaahContext): boolean {
     const dusk = 1 - clamp(night.elapsedMs / 120000, 0, 1);
     let chance = lerp(0.24, 0.58, dusk);
 
@@ -484,7 +484,7 @@ function firstNightDelay (night: NightBaahContext): number {
     return night.elapsedMs < 8000 ? 3200 + Math.random() * 4200 : 6000 + Math.random() * 8000;
 }
 
-function nextNightDelay (sheep: Sheep, night: NightBaahContext, scared: boolean): number {
+function nextNightDelay (sheep: FlockBehavior, night: NightBaahContext, scared: boolean): number {
     const nearFold = night.fold
         ? Math.hypot(sheep.sprite.x - night.fold.x, sheep.sprite.y - night.fold.y) < FOLD_COZY
         : false;
@@ -507,7 +507,7 @@ function nextNightDelay (sheep: Sheep, night: NightBaahContext, scared: boolean)
 
 function playNightBaah (
     scene: Scene,
-    sheep: Sheep,
+    sheep: FlockBehavior,
     listener: { x: number; y: number },
     scared: boolean
 ): boolean {
@@ -532,7 +532,7 @@ function playNightBaah (
 
 function nightBaahSettings (
     scene: Scene,
-    sheep: Sheep,
+    sheep: FlockBehavior,
     listener: { x: number; y: number },
     scared: boolean
 ): Phaser.Types.Sound.SoundConfig {
@@ -564,7 +564,7 @@ function nightBaahSettings (
     };
 }
 
-function bleatSettings (scene: Scene, sheep: Sheep, listener: { x: number; y: number }): Phaser.Types.Sound.SoundConfig {
+function bleatSettings (scene: Scene, sheep: FlockBehavior, listener: { x: number; y: number }): Phaser.Types.Sound.SoundConfig {
     const dx = sheep.sprite.x - listener.x;
     const dy = sheep.sprite.y - listener.y;
     const dist = Math.hypot(dx, dy);

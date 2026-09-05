@@ -1,5 +1,5 @@
 import { Scene } from 'phaser';
-import { Sheep } from '../entities/Sheep';
+import { FlockBehavior } from '../entities/flockBehavior';
 import { isDocumentAudioLive, isSoundOn } from './soundPref';
 
 /** Friendly greeting roar. */
@@ -9,7 +9,7 @@ let noiseBuffer: AudioBuffer | null = null;
 
 export function playFriendlyLionRoar (
     scene: Scene,
-    sheep: Sheep,
+    sheep: FlockBehavior,
     listener: { x: number; y: number }
 ): boolean {
     if (!isDocumentAudioLive() || !scene.sys.isActive() || scene.sys.isPaused()) {
@@ -24,7 +24,8 @@ export function playFriendlyLionRoar (
         return true;
     }
 
-    const ctx = scene.sound.context;
+    const sound = scene.sound as { context?: AudioContext };
+    const ctx = sound.context;
 
     if (!(ctx instanceof AudioContext)) {
         return false;
