@@ -782,17 +782,16 @@ export class WorldScene extends Scene {
 
         const verseId = nextWaterVerseId(this.foundWaterVerses);
 
-        if (!verseId) {
+        if (verseId) {
+            this.foundWaterVerses.push(verseId);
+            this.saveProgress(this.lastCheckpoint ?? 'found-gem');
+            // Verse only — don't lead with "The flock is drinking."
+            this.continueLines([waterVerseLine(verseId)]);
             return;
         }
 
-        this.foundWaterVerses.push(verseId);
-        this.saveProgress(this.lastCheckpoint ?? 'found-gem');
-        // Drink starts immediately; speech waits if a Bible gem (or other script) is talking.
-        this.continueLines([
-            'The flock is drinking.',
-            waterVerseLine(verseId)
-        ]);
+        // All water passages heard; announce the drink itself.
+        this.continueLines(['The flock is drinking.']);
     }
 
     private playLines (lines: string[], onDone?: () => void): void {
