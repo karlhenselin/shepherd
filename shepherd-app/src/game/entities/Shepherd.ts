@@ -1,6 +1,7 @@
 import { Scene, GameObjects, Physics, Input, Math as PMath } from 'phaser';
 import { characterDepth } from '../world/constants';
 import { KeepOutZone, pushOutsideKeepOuts } from './flockBehavior';
+import { walkAnimKey } from './shepherdArt';
 
 const SPEED = 180;
 const ARRIVE_DISTANCE = 8;
@@ -8,6 +9,10 @@ const SHEPHERD_W = 80;
 const SHEPHERD_H = 80;
 const SHADOW_OFFSET = 20;
 const PET_MS = 1800;
+const WALK_PHASE_SPEED = 0.014;
+const WALK_BOB_DEG = 3.2;
+const IDLE_CLOAK_DEG = 1.15;
+const MOVE_THRESHOLD = 12;
 
 export class Shepherd {
     readonly sprite: GameObjects.Sprite;
@@ -30,6 +35,8 @@ export class Shepherd {
     private keepOuts: KeepOutZone[] = [];
     private stickX = 0;
     private stickY = 0;
+    private walkPhase = 0;
+    private walking = false;
 
     constructor (scene: Scene, x: number, y: number) {
         ensureShepherdTextures(scene);
@@ -93,6 +100,11 @@ export class Shepherd {
 
     get isGuided (): boolean {
         return this.guided;
+    }
+
+    /** True while a guideTo walk still has a destination. */
+    get hasGuideTarget (): boolean {
+        return this.target !== null;
     }
 
     get isMoving (): boolean {
@@ -163,7 +175,12 @@ export class Shepherd {
 
     /** Kneel toward a sheep for a short cozy pet. */
     beginPetting (sheepX: number, _sheepY: number, durationMs = PET_MS): void {
-        if (this.lyingDown) {
+        if (this.lyingDown || this.sitting) {
+            return;
+        }
+
+        // Do not wipe an in-progress scripted walk (shade rest, picnic, etc.).
+        if (this.guided && this.target) {
             return;
         }
 
@@ -253,16 +270,21 @@ export class Shepherd {
     }
 
     private applyTexture (): void {
+        this.stopWalkAnim();
+        const key = this.standTextureKey();
+        this.sprite.setTexture(key);
+        this.applyDisplaySize();
+    }
+
+    private standTextureKey (): string {
         const kneeling = this.isPetting || this.sitting;
-        const key = this.whiteRobe
+        return this.whiteRobe
             ? (this.staffEquipped
                 ? (kneeling ? 'shepherd-kneel-staff-white' : 'shepherd-staff-white')
                 : (kneeling ? 'shepherd-kneel-white' : 'shepherd-white'))
             : (this.staffEquipped
                 ? (kneeling ? 'shepherd-kneel-staff' : 'shepherd-staff')
                 : (kneeling ? 'shepherd-kneel' : 'shepherd'));
-        this.sprite.setTexture(key);
-        this.applyDisplaySize();
     }
 
     /** Keep PNG art at game scale — setScale(1,1) would revert to native 1024px. */
@@ -276,21 +298,25 @@ export class Shepherd {
 
     update (keepOuts: KeepOutZone[] = []): void {
         this.keepOuts = keepOuts;
+        const delta = this.sprite.scene.game.loop.delta;
 
         if (this.lyingDown) {
             this.body.setVelocity(0, 0);
+            this.stopWalkAnim();
             this.placeShadow();
             return;
         }
 
         if (this.sitting) {
             this.body.setVelocity(0, 0);
+            this.stopWalkAnim();
             this.placeShadow();
             return;
         }
 
         if (this.isPetting) {
             this.body.setVelocity(0, 0);
+            this.stopWalkAnim();
             this.placeShadow();
             return;
         }
@@ -309,6 +335,7 @@ export class Shepherd {
                 this.body.velocity.normalize().scale(speed);
                 this.faceVelocity();
                 this.applyKeepOutPush();
+                this.tickWalkAnim(delta);
                 this.placeShadow();
                 return;
             }
@@ -326,6 +353,7 @@ export class Shepherd {
                 this.body.velocity.normalize().scale(SPEED);
                 this.faceVelocity();
                 this.applyKeepOutPush();
+                this.tickWalkAnim(delta);
                 this.placeShadow();
                 return;
             }
@@ -339,6 +367,7 @@ export class Shepherd {
                 this.target = null;
                 this.body.setVelocity(0, 0);
                 this.applyKeepOutPush();
+                this.tickWalkAnim(delta);
                 this.placeShadow();
                 const arrived = this.arriveCallback;
                 this.arriveCallback = null;
@@ -350,12 +379,14 @@ export class Shepherd {
             this.body.velocity.normalize().scale(this.guided ? this.guidedSpeed : SPEED);
             this.faceVelocity();
             this.applyKeepOutPush();
+            this.tickWalkAnim(delta);
             this.placeShadow();
             return;
         }
 
         this.body.setVelocity(0, 0);
         this.applyKeepOutPush();
+        this.tickWalkAnim(delta);
         this.placeShadow();
     }
 
@@ -419,6 +450,59 @@ export class Shepherd {
 
         if (Math.abs(vx) > 8) {
             this.sprite.setFlipX(vx < 0);
+        }
+    }
+
+    private tickWalkAnim (deltaMs: number): void {
+        const moving = Math.hypot(this.body.velocity.x, this.body.velocity.y) > MOVE_THRESHOLD;
+
+        if (moving) {
+            this.walkPhase += deltaMs * WALK_PHASE_SPEED;
+            this.sprite.setAngle(Math.sin(this.walkPhase) * WALK_BOB_DEG);
+            this.playWalkAnim();
+            return;
+        }
+
+        if (this.walking) {
+            this.stopWalkAnim();
+        }
+
+        // Soft idle cloak sway — angle only, idle texture stays put.
+        this.walkPhase += deltaMs * 0.0035;
+        this.sprite.setAngle(Math.sin(this.walkPhase) * IDLE_CLOAK_DEG);
+    }
+
+    private playWalkAnim (): void {
+        const standKey = this.standTextureKey();
+        const animKey = walkAnimKey(standKey);
+
+        if (!this.sprite.scene.anims.exists(animKey)) {
+            return;
+        }
+
+        if (!this.walking || this.sprite.anims.currentAnim?.key !== animKey) {
+            this.sprite.play(animKey, true);
+            this.applyDisplaySize();
+            this.walking = true;
+        }
+    }
+
+    private stopWalkAnim (): void {
+        this.walking = false;
+
+        if (this.sprite.anims.isPlaying) {
+            this.sprite.anims.stop();
+        }
+
+        const key = this.standTextureKey();
+
+        if (this.sprite.texture.key !== key) {
+            this.sprite.setTexture(key);
+            this.applyDisplaySize();
+        }
+
+        if (!this.lyingDown) {
+            this.sprite.setAngle(0);
         }
     }
 

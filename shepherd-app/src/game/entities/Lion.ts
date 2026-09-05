@@ -15,10 +15,13 @@ const FLOCK_SHADOW_OFFSET = 4;
 function lionFlockAppearance (): FlockAppearance {
     return {
         textureKey: TEXTURE_KEY,
+        restTextureKey: 'lion-lying',
         shadowKey: SHADOW_KEY,
         displayHeight: FLOCK_SIZE,
+        restDisplayHeight: 34,
         fitAspect: true,
         originY: 0.72,
+        restOriginY: 0.88,
         shadowOffset: FLOCK_SHADOW_OFFSET,
         shadowDisplaySize: { width: 60, height: 24 },
         shadowTiltDeg: 7,

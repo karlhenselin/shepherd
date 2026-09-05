@@ -46,10 +46,16 @@ export type FlockTraits = {
 
 export type FlockAppearance = {
     textureKey: string;
+    /** Peaceable waiting pose (lying down). Falls back to textureKey when absent. */
+    restTextureKey?: string;
     shadowKey: string;
     displayHeight: number;
+    /** Shorter display height while resting so a low silhouette stays in scale. */
+    restDisplayHeight?: number;
     fitAspect: boolean;
     originY: number;
+    /** Feet sit lower on lying art; defaults to originY. */
+    restOriginY?: number;
     shadowOffset: number;
     shadowDisplaySize?: { width: number; height: number };
     shadowTiltDeg?: number;
@@ -160,6 +166,10 @@ export class FlockBehavior {
         this.body.setCircle(bodyRadius);
         this.body.setVelocity(0, 0);
         this.body.setImmovable(true);
+
+        if (this.peaceable && appearance.restTextureKey) {
+            this.applyRestPose();
+        }
     }
 
     get isBusy (): boolean {
@@ -227,6 +237,7 @@ export class FlockBehavior {
         this.drinkSpot = null;
         this.penPath = [];
         this.penTarget = null;
+        this.applyStandPose();
         this.body.setImmovable(false);
         this.body.setVelocity(0, 0);
     }
@@ -242,6 +253,14 @@ export class FlockBehavior {
         this.sprite.setAngle(0);
         this.body.setVelocity(0, 0);
         this.body.setImmovable(true);
+
+        if (this.peaceable && this.appearance.restTextureKey) {
+            this.applyRestPose();
+        }
+        else {
+            this.applyStandPose();
+        }
+
         this.placeShadow();
     }
 
@@ -260,7 +279,7 @@ export class FlockBehavior {
     }
 
     /** Following sheep caught in brambles — bandage to free them. */
-    snareInThorns (): void {
+    snareInThorns (x: number, y: number): void {
         this.clearHappyDance();
         this.rescueWait = null;
         this.hurt = true;
@@ -268,7 +287,8 @@ export class FlockBehavior {
         this.hurtByWolf = false;
         this.discovered = true;
         this.mood = 'hurt';
-        this.sprite.setAngle(18);
+        this.sprite.setPosition(x, y);
+        this.sprite.setAngle(8);
         this.sprite.setTint(0xc4d4a0);
         this.body.setImmovable(true);
         this.body.setVelocity(0, 0);
@@ -453,6 +473,10 @@ export class FlockBehavior {
             this.sprite.setAngle(-10);
             this.placeShadow();
 
+            const remaining = this.eatUntil - now;
+            const progress = 1 - Math.max(0, remaining) / EAT_MS;
+            this.eatPatch?.setEatProgress(progress);
+
             if (now >= this.eatUntil) {
                 this.sprite.setAngle(0);
                 this.mood = 'following';
@@ -468,7 +492,18 @@ export class FlockBehavior {
 
         if (this.mood === 'hurt') {
             this.body.setVelocity(0, 0);
-            this.sprite.setAngle(32);
+
+            if (this.snaredInThorns) {
+                // Tangled upright in the bush — not the hole sprawl.
+                this.sprite.setAngle(8);
+            }
+            else if (this.hurtByWolf) {
+                this.sprite.setAngle(10);
+            }
+            else {
+                this.sprite.setAngle(32);
+            }
+
             this.placeShadow();
 
             if (!this.discovered && dist < NOTICE_DISTANCE) {
@@ -509,6 +544,11 @@ export class FlockBehavior {
         if (this.mood === 'waiting') {
             this.body.setVelocity(0, 0);
             this.sprite.setAngle(0);
+
+            if (this.peaceable && this.appearance.restTextureKey) {
+                this.applyRestPose();
+            }
+
             this.placeShadow();
 
             if (dist < NOTICE_DISTANCE) {
@@ -528,7 +568,7 @@ export class FlockBehavior {
             }
         }
 
-        if (this.hungry || this.snack) {
+        if (!huddle && (this.hungry || this.snack)) {
             const hunger = this.tickHunger(grass, now);
 
             if (hunger === 'ate') {
@@ -787,9 +827,52 @@ export class FlockBehavior {
         }
     }
 
+    /** Lying-down art while peaceable animals wait to be found. */
+    private applyRestPose (): void {
+        const key = this.appearance.restTextureKey;
+
+        if (!key || !this.scene.textures.exists(key)) {
+            return;
+        }
+
+        if (this.sprite.texture.key === key) {
+            return;
+        }
+
+        this.sprite.setTexture(key);
+        const height = this.appearance.restDisplayHeight ?? this.appearance.displayHeight;
+        this.fitSpriteHeight(height);
+        this.sprite.setOrigin(0.5, this.appearance.restOriginY ?? this.appearance.originY);
+        this.sprite.setAngle(0);
+    }
+
+    private applyStandPose (): void {
+        const key = this.appearance.textureKey;
+
+        if (this.sprite.texture.key === key) {
+            return;
+        }
+
+        this.sprite.setTexture(key);
+        this.fitSpriteHeight(this.appearance.displayHeight);
+        this.sprite.setOrigin(0.5, this.appearance.originY);
+    }
+
+    private fitSpriteHeight (height: number): void {
+        if (this.appearance.fitAspect) {
+            const src = this.sprite.texture.getSourceImage() as { width: number; height: number };
+            const width = height * (src.width / Math.max(src.height, 1));
+            this.sprite.setDisplaySize(width, height);
+            return;
+        }
+
+        this.sprite.setDisplaySize(height, height);
+    }
+
     private placeShadow (): void {
         const depth = characterDepth(this.sprite.y);
-        this.sprite.setDepth(depth);
+        // Sit under the bramble canopy so stems/leaves read over the sheep.
+        this.sprite.setDepth(this.snaredInThorns ? depth - 0.15 : depth);
         this.shadow.setDepth(depth - 0.01);
         this.shadow.setPosition(this.sprite.x, this.sprite.y + this.appearance.shadowOffset);
         this.shadow.setFlipX(this.sprite.flipX);
@@ -803,7 +886,7 @@ export class FlockBehavior {
 
     /** Walk up to an uneaten tuft, then chew. */
     private tickHunger (grass: GrassPatch[], now: number): 'ate' | 'walking' | null {
-        if (this.snack && !this.hungry && now < this.nextSnackAt) {
+        if (now < this.nextSnackAt) {
             return null;
         }
 

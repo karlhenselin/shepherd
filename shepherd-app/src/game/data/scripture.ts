@@ -150,6 +150,15 @@ export function isaiah11LionLine (): string {
     return `${ISAIAH_11_6.lion.text} — ${ISAIAH_11_6.lion.ref}`;
 }
 
+export const ISAIAH_65_25 = {
+    ref: 'Isaiah 65:25',
+    text: 'The wolf and the lamb will feed together, and the lion will eat straw like the ox, but the food of the serpent will be dust. They will neither harm nor destroy on all My holy mountain, says the LORD.'
+} as const;
+
+export function isaiah65LionLine (): string {
+    return `${ISAIAH_65_25.text} — ${ISAIAH_65_25.ref}`;
+}
+
 export const REVELATION_21_2 = {
     ref: 'Revelation 21:2',
     text: 'I saw the Holy City, the new Jerusalem, coming down out of heaven from God.'
@@ -250,7 +259,8 @@ export const STORY_PASSAGES = [
     JOHN_14_6,
     JOHN_10[9],
     CORINTHIANS_15_51,
-    REVELATION_21_2
+    REVELATION_21_2,
+    ISAIAH_65_25
 ] as const;
 
 export type StoryPassageFlags = {
@@ -268,6 +278,7 @@ export type StoryPassageFlags = {
     heardJohn109?: boolean;
     heardCorinthians?: boolean;
     heardCity?: boolean;
+    heardIsaiah6525?: boolean;
     foundNames?: string[];
 };
 
@@ -332,6 +343,10 @@ export function unlockedStoryPassages (flags: StoryPassageFlags): { ref: string;
 
     if (flags.foundNames?.some((name) => name === 'Wolf' || name === 'Sarah' || name === 'Leo' || name === 'Lion')) {
         unlocked.push(ISAIAH_11_6);
+    }
+
+    if (flags.heardIsaiah6525) {
+        unlocked.push(ISAIAH_65_25);
     }
 
     return unlocked;

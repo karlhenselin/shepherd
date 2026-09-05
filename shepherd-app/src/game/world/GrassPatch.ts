@@ -9,14 +9,26 @@ export const GRASS_EAT_ARRIVE = 16;
 /** After the change, eaten tufts grow back this long after a nibble. */
 export const GRASS_GROW_BACK_MS = 15_000;
 
+/** Full → three chew stages → stubble. */
+const GRASS_TEXTURES = [
+    'grass-tuft',
+    'grass-eat-1',
+    'grass-eat-2',
+    'grass-eat-3',
+    'grass-eaten'
+] as const;
+
 export class GrassPatch {
     readonly sprite: GameObjects.Sprite;
     private claimed = false;
     eaten = false;
     private eatenAt = 0;
+    /** 0 = full tuft … 4 = fully eaten. */
+    private eatStage = 0;
 
     constructor (scene: Scene, x: number, y: number) {
         ensureGrassTexture(scene);
+        ensureEatStageTextures(scene);
         ensureEatenGrassTexture(scene);
         this.sprite = scene.add.sprite(x, y, 'grass-tuft');
         this.sprite.setDisplaySize(DISPLAY_SIZE, DISPLAY_SIZE);
@@ -44,12 +56,29 @@ export class GrassPatch {
         this.claimed = true;
     }
 
+    /**
+     * While a sheep chews, advance through shorter tuft sprites.
+     * @param progress 0 at first bite … 1 when finished.
+     */
+    setEatProgress (progress: number): void {
+        const clamped = Math.max(0, Math.min(1, progress));
+        // Stages 1–3 while chewing; stage 4 (eaten) is applied in markEaten.
+        const stage = Math.min(3, Math.ceil(clamped * 3));
+
+        if (stage === this.eatStage) {
+            return;
+        }
+
+        this.eatStage = stage;
+        this.applyTexture(GRASS_TEXTURES[stage]);
+    }
+
     markEaten (now: number): void {
         this.claimed = true;
         this.eaten = true;
         this.eatenAt = now;
-        this.sprite.setTexture('grass-eaten');
-        this.sprite.setDisplaySize(DISPLAY_SIZE, DISPLAY_SIZE);
+        this.eatStage = 4;
+        this.applyTexture('grass-eaten');
     }
 
     /** After 1 Corinthians 15:51, restore the tuft once the delay has passed. */
@@ -61,7 +90,12 @@ export class GrassPatch {
         this.claimed = false;
         this.eaten = false;
         this.eatenAt = 0;
-        this.sprite.setTexture('grass-tuft');
+        this.eatStage = 0;
+        this.applyTexture('grass-tuft');
+    }
+
+    private applyTexture (key: string): void {
+        this.sprite.setTexture(key);
         this.sprite.setDisplaySize(DISPLAY_SIZE, DISPLAY_SIZE);
     }
 }
@@ -140,6 +174,32 @@ function ensureGrassTexture (scene: Scene): void {
     g.fillTriangle(22, 10, 19, 26, 25, 26);
     g.generateTexture('grass-tuft', 32, 32);
     g.destroy();
+}
+
+function ensureEatStageTextures (scene: Scene): void {
+    const stages: Array<{ key: string; tipY: number }> = [
+        { key: 'grass-eat-1', tipY: 10 },
+        { key: 'grass-eat-2', tipY: 14 },
+        { key: 'grass-eat-3', tipY: 18 }
+    ];
+
+    for (const stage of stages) {
+        if (scene.textures.exists(stage.key)) {
+            continue;
+        }
+
+        const g = scene.add.graphics();
+        g.fillStyle(0x8a6a42, 1);
+        g.fillEllipse(16, 26, 20, 9);
+        g.fillStyle(0x5f8a3a, 1);
+        g.fillTriangle(16, stage.tipY, 10, 28, 18, 28);
+        g.fillTriangle(10, stage.tipY + 2, 6, 28, 13, 28);
+        g.fillTriangle(22, stage.tipY + 1, 18, 28, 26, 28);
+        g.fillStyle(0x8fbc6a, 1);
+        g.fillTriangle(14, stage.tipY + 3, 12, 26, 16, 26);
+        g.generateTexture(stage.key, 32, 32);
+        g.destroy();
+    }
 }
 
 function ensureEatenGrassTexture (scene: Scene): void {

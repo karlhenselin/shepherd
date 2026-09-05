@@ -1,8 +1,6 @@
 import { GameObjects, Geom } from 'phaser';
 
 const EDGE = 16;
-/** Typical status-bar / cutout height when `env(safe-area-*)` is 0 (Android WebView). */
-const TOUCH_STATUS = 44;
 const HIT_PAD = 20;
 
 export type ChromeInsets = {
@@ -46,15 +44,15 @@ function readSafeEnv (): ChromeInsets {
     return insets;
 }
 
-/** Extra inset so HUD sits below status / cutout / gesture bars. */
+/** Extra inset so HUD clears cutouts / gesture edges (system bars are hidden immersively). */
 export function chromeInsets (): ChromeInsets {
     const env = readSafeEnv();
     const coarse = isPhoneChrome();
 
     return {
-        top: env.top > 0 ? env.top : (coarse ? TOUCH_STATUS : 0),
-        right: env.right,
-        bottom: env.bottom > 0 ? env.bottom : (coarse ? 20 : 0),
+        top: env.top,
+        right: env.right > 0 ? env.right : (coarse ? 12 : 0),
+        bottom: env.bottom > 0 ? env.bottom : (coarse ? 16 : 0),
         left: env.left
     };
 }
@@ -68,6 +66,17 @@ export function chromePad (): ChromeInsets {
         bottom: EDGE + inset.bottom,
         left: EDGE + inset.left
     };
+}
+
+/** Day cue / speech bubble — tight to the top on phone now that system bars are hidden. */
+export function cuePad (): { x: number; y: number } {
+    const pad = chromePad();
+
+    if (isPhoneChrome()) {
+        return { x: pad.left, y: 6 };
+    }
+
+    return { x: pad.left, y: pad.top };
 }
 
 /** Expand the tap target past the 40×40 icon so a finger can actually hit it. */

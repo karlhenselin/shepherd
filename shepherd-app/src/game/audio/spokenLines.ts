@@ -3,6 +3,7 @@ import {
     CORINTHIANS_15_51,
     ISAIAH_11_6,
     ISAIAH_53_6,
+    ISAIAH_65_25,
     JOHN_10,
     JOHN_14_6,
     MATTHEW_25_23,
@@ -13,6 +14,7 @@ import {
     isaiah11LionLine,
     isaiah11WolfLine,
     isaiah53Line,
+    isaiah65LionLine,
     john10Line,
     john14Line,
     psalm23Comfort,
@@ -63,7 +65,6 @@ const STATIC_LINES = [
     'Easy, Biscuit.',
     'Gentle now, Biscuit.',
     'Tiny Biscuit.',
-    'I\'ll call you Leo.',
     'I\'ll name you Sarah!',
     'What a mane.',
     'Good lion.',
@@ -127,8 +128,10 @@ export function allSpokenLines (): string[] {
     lines.add(isaiah53Line());
     lines.add(isaiah11WolfLine());
     lines.add(isaiah11LionLine());
+    lines.add(isaiah65LionLine());
     lines.add(revelation21CityLine());
     lines.add(scriptureLine(ISAIAH_11_6));
+    lines.add(scriptureLine(ISAIAH_65_25));
     lines.add(scriptureLine(REVELATION_21_2));
     lines.add(john10Line(2));
     lines.add(john10Line(9));

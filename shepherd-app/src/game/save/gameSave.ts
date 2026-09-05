@@ -26,6 +26,8 @@ export type GameSave = {
     heardJohn109?: boolean;
     heardCorinthians?: boolean;
     heardCity?: boolean;
+    /** Spoken once when Leo first eats grass after the change. */
+    heardIsaiah6525?: boolean;
     whiteRobe?: boolean;
     hasStaff?: boolean;
     staff?: SavedPoint | null;
@@ -37,6 +39,8 @@ export type GameSave = {
     foundWaterVerses?: string[];
     foundTreeVerses?: string[];
     foundThornVerses?: string[];
+    /** Discovered follower currently snared in thorns (must not be treated as waitingName). */
+    snaredName?: string | null;
     /** Logical Play Games achievement ids already earned (local queue). */
     unlockedAchievements?: string[];
     /** Reached the Well Done ending screen. */

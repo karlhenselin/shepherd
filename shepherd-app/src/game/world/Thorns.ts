@@ -13,6 +13,8 @@ const WATER_EDGE_MARGIN = 16;
 /** Ground decal: above water/holes, below grass and Y-sorted characters. */
 const MOUND_DEPTH = 2.35;
 const DEFAULT_STEM_ORIGIN = 0.64;
+/** Foliage alpha while a sheep is nestled inside (easier to see / bandage). */
+const SNARE_FOLIAGE_ALPHA = 0.48;
 
 const stemOriginY: Record<string, number> = {};
 
@@ -53,6 +55,24 @@ export class Thorns {
 
     isNear (x: number, y: number): boolean {
         return Math.hypot(this.x - x, this.y - y) < THORN_WALK_BY_RADIUS;
+    }
+
+    /** Deep in the foliage (above the stem origin), not on the snare rim. */
+    snareSpot (): { x: number; y: number } {
+        return {
+            x: this.x,
+            y: this.y - DISPLAY_SIZE * 0.24 + 30
+        };
+    }
+
+    /** Soften the canopy so a snared sheep reads clearly. */
+    revealSnare (): void {
+        this.sprite.setAlpha(SNARE_FOLIAGE_ALPHA);
+    }
+
+    /** Restore full foliage after the sheep is freed. */
+    hideSnare (): void {
+        this.sprite.setAlpha(1);
     }
 
     private applyLook (plantKey: string): void {

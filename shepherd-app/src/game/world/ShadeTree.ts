@@ -24,6 +24,11 @@ export class ShadeTree {
         this.sprite.setDepth(characterDepth(y));
     }
 
+    /** Ground shade oval — hide at night when there is no sun to cast it. */
+    setShadeVisible (visible: boolean): void {
+        this.shade.setVisible(visible);
+    }
+
     get x (): number {
         return this.shade.x;
     }
@@ -36,6 +41,11 @@ export class ShadeTree {
         const dx = (x - this.x) / SHADE_RX;
         const dy = (y - this.y) / SHADE_RY;
         return dx * dx + dy * dy <= 1;
+    }
+
+    /** Center of the shade oval — shepherd kneels here after walking in. */
+    restSpot (): { x: number; y: number } {
+        return { x: this.x, y: this.y + 10 };
     }
 
     gatherSpot (slot: number, count: number): { x: number; y: number } {

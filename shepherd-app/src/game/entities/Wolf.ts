@@ -37,10 +37,13 @@ type WolfMode = 'orbit' | 'retreat' | 'hunt';
 function wolfFlockAppearance (): FlockAppearance {
     return {
         textureKey: TEXTURE_KEY,
+        restTextureKey: 'wolf-lying',
         shadowKey: SHADOW_KEY,
         displayHeight: FLOCK_SIZE,
+        restDisplayHeight: 34,
         fitAspect: true,
         originY: 0.72,
+        restOriginY: 0.88,
         shadowOffset: FLOCK_SHADOW_OFFSET,
         shadowDisplaySize: { width: 60, height: 24 },
         shadowTiltDeg: 7,

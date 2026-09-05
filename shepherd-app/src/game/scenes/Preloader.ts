@@ -3,6 +3,29 @@ import { loadHowlSounds } from '../audio/howl';
 import { loadCueSounds } from '../audio/cues';
 import { loadSheepSounds } from '../audio/sheepSounds';
 import { prepareThornArt } from '../world/Thorns';
+import { prepareShepherdArt } from '../entities/shepherdArt';
+
+let assetsReady = false;
+let readyWaiters: Array<() => void> = [];
+
+export function whenAssetsReady (): Promise<void> {
+    if (assetsReady) {
+        return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+        readyWaiters.push(resolve);
+    });
+}
+
+function markAssetsReady (): void {
+    assetsReady = true;
+    const waiters = readyWaiters;
+    readyWaiters = [];
+    for (const resolve of waiters) {
+        resolve();
+    }
+}
 
 export class Preloader extends Scene
 {
@@ -13,18 +36,25 @@ export class Preloader extends Scene
 
     init ()
     {
-        this.cameras.main.setBackgroundColor(0x000000);
+        // Run under IntroScene without covering it.
+        this.cameras.main.setVisible(false);
+        this.input.enabled = false;
     }
 
     preload ()
     {
-        //  Load the assets for the game - Replace with your own assets
+        if (assetsReady || this.textures.exists('shepherd')) {
+            return;
+        }
+
         this.load.setPath('assets');
 
         this.load.image('sheep', 'sheep.png');
         this.load.image('sheepfold', 'sheepfold.png');
         this.load.image('wolf', 'wolf.png');
+        this.load.image('wolf-lying', 'wolf-lying.png');
         this.load.image('lion', 'lion.png');
+        this.load.image('lion-lying', 'lion-lying.png');
         this.load.image('jerusalem', 'jerusalem.png');
         this.load.image('thorns-roses', 'thorns-roses.png');
         this.load.image('shepherd', 'shepherd.png');
@@ -38,6 +68,9 @@ export class Preloader extends Scene
         this.load.image('water-source', 'water.png');
         this.load.image('thorns', 'thorns.png');
         this.load.image('grass-tuft', 'grass-tuft.png');
+        this.load.image('grass-eat-1', 'grass-eat-1.png');
+        this.load.image('grass-eat-2', 'grass-eat-2.png');
+        this.load.image('grass-eat-3', 'grass-eat-3.png');
         this.load.image('grass-eaten', 'grass-eaten.png');
         this.load.image('picnic', 'picnic.png');
         this.load.image('shade-tree', 'shade-tree.png');
@@ -53,17 +86,23 @@ export class Preloader extends Scene
 
     create ()
     {
-        //  When all the assets have loaded, it's often worth creating global objects here that the rest of the game can use.
-        //  For example, you can define global animations here, so we can use them in other scenes.
+        if (!assetsReady) {
+            knockOutNearBlack(this, 'wolf');
+            knockOutNearBlack(this, 'wolf-lying');
+            knockOutNearBlack(this, 'lion');
+            knockOutNearBlack(this, 'lion-lying');
+            knockOutNearBlack(this, 'jerusalem');
+            knockOutNearBlack(this, 'thorns-roses');
+            prepareThornArt(this);
+            prepareShepherdArt(this);
+            trimTransparentPadding(this, 'wolf');
+            trimTransparentPadding(this, 'wolf-lying');
+            trimTransparentPadding(this, 'lion');
+            trimTransparentPadding(this, 'lion-lying');
+            markAssetsReady();
+        }
 
-        knockOutNearBlack(this, 'wolf');
-        knockOutNearBlack(this, 'lion');
-        knockOutNearBlack(this, 'jerusalem');
-        knockOutNearBlack(this, 'thorns-roses');
-        prepareThornArt(this);
-        trimTransparentPadding(this, 'wolf');
-        trimTransparentPadding(this, 'lion');
-        this.scene.start('IntroScene');
+        this.scene.stop();
     }
 }
 

@@ -1,6 +1,7 @@
 import { GameObjects, Scene } from 'phaser';
 import { GENESIS_1_1 } from '../data/scripture';
 import { isSoundOn } from '../audio/soundPref';
+import { whenAssetsReady } from './Preloader';
 import { speakCue, stopSpeech } from '../ui/speech';
 import { startCenter } from '../world/constants';
 import { watercolorWorld } from '../world/watercolorWorld';
@@ -57,6 +58,7 @@ export class IntroScene extends Scene {
             this.goToWorld();
         });
 
+        this.scene.launch('Preloader');
         void this.play();
     }
 
@@ -75,15 +77,15 @@ export class IntroScene extends Scene {
     }
 
     private async play (): Promise<void> {
-        await this.wait(900);
+        await this.wait(220);
         if (!this.here()) {
             return;
         }
 
         this.line.setText('In the beginning');
-        await this.fade(this.line, 1, 900);
+        await this.fade(this.line, 1, 480);
         await this.speak('In the beginning');
-        await this.wait(450);
+        await this.wait(320);
 
         if (!this.here()) {
             return;
@@ -199,9 +201,15 @@ export class IntroScene extends Scene {
         this.sound.stopByKey('exhale');
         this.tweens.killAll();
 
-        this.cameras.main.fadeOut(800, 255, 255, 255);
-        this.cameras.main.once('camerafadeoutcomplete', () => {
-            this.scene.start('WorldScene', { fromIntro: true });
+        void whenAssetsReady().then(() => {
+            if (!this.sys.isActive()) {
+                return;
+            }
+
+            this.cameras.main.fadeOut(800, 255, 255, 255);
+            this.cameras.main.once('camerafadeoutcomplete', () => {
+                this.scene.start('WorldScene', { fromIntro: true });
+            });
         });
     }
 

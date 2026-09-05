@@ -197,6 +197,19 @@ export function stopSpeech (): void {
     haltPlayback();
 }
 
+/**
+ * Mute mid-line: stop the voice but keep the dialogue lifecycle.
+ * Re-enters speakCue so a silent timer still fires onEnded (shade kneel, scripts).
+ */
+export function silenceSpeech (): void {
+    if (activeText.length === 0 && !activeOnEnded) {
+        stopSpeech();
+        return;
+    }
+
+    speakCue(activeText, activeOnEnded);
+}
+
 export function clearAllSpeech (): void {
     held = null;
     stopSpeech();

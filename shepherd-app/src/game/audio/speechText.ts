@@ -9,12 +9,12 @@ export function forSpeech (text: string): string {
 
 /**
  * Homograph hints for synthesizers. Does not change clip ids or on-screen text.
- * Leviticus 26:4 "produce" is the food noun (PRO-duce), not the verb (pro-DUCE).
+ * Isaiah 7:24 "bow" is the weapon (beau = long O), not bow-the-gesture / bough (ow).
  * "Job" the book is Jobe (long O), not job-the-work (short o).
  */
 export function forPronunciation (spoken: string): string {
     return spoken
-        .replace(/\byield its produce\b/g, 'yield its PROduce')
+        .replace(/\bbow and arrow\b/gi, 'beau and arrow')
         .replace(/\bJob (\d)/g, 'Jobe $1');
 }
 

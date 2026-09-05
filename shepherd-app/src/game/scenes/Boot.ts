@@ -9,12 +9,12 @@ export class Boot extends Scene
 
     preload ()
     {
-        // Boot only loads what IntroScene needs before the Preloader runs.
+        // Only what IntroScene needs so "In the beginning" can start immediately.
         this.load.audio('exhale', 'assets/audio/exhale.mp3');
     }
 
     create ()
     {
-        this.scene.start('Preloader');
+        this.scene.start('IntroScene');
     }
 }

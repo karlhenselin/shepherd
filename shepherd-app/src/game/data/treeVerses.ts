@@ -6,7 +6,6 @@ export const TREE_ROBE_VERSE_IDS = ['revelation-2-7b', 'revelation-22-14'] as co
 export const TREE_VERSES = [
     { id: 'genesis-2-16', ref: 'Genesis 2:16', text: 'And the LORD God commanded him, “You may eat freely from every tree of the garden.”' },
     { id: 'genesis-18-4', ref: 'Genesis 18:4', text: 'Let a little water be brought, that you may wash your feet and rest under the tree.' },
-    { id: 'leviticus-26-4', ref: 'Leviticus 26:4', text: 'I will send you rain in its season, and the ground will yield its produce and the trees of the field their fruit.' },
     { id: 'job-7-2', ref: 'Job 7:2', text: 'Like a slave he longs for shade; like a hired man he waits for his wages.' },
     { id: 'job-40-22', ref: 'Job 40:22', text: 'The lotus plants conceal him in their shade; the willows of the brook surround him.' },
     { id: '1-kings-19-5', ref: '1 Kings 19:5', text: 'Then he lay down and slept under the broom tree.' },
