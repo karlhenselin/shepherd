@@ -56,7 +56,6 @@ export class TreasureScene extends Scene {
             titleSize: '40px',
             headerH: 88,
             footerH: 100,
-            scrollbar: true,
             onBack: () => this.close()
         });
 

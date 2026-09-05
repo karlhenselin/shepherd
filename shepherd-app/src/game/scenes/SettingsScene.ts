@@ -1,5 +1,4 @@
 import { Scene, GameObjects } from 'phaser';
-import { showPlayAchievements, playGamesAvailable } from '../achievements/playGames';
 import { clearSave } from '../save/gameSave';
 import { createPaperScroll, DRAG_CLICK_SLOP, UMBER, type PaperScroll } from '../ui/paperScroll';
 
@@ -45,16 +44,17 @@ export class SettingsScene extends Scene {
             onBack: () => this.close()
         });
 
-        const wrap = Math.min(720, this.scroll.width - 56);
+        const wrap = Math.min(
+            720,
+            this.scroll.width - this.scroll.pad.left - this.scroll.pad.right - this.scroll.scrollGutter - 24
+        );
         const contentHeight = this.addCredits(wrap);
 
-        if (playGamesAvailable()) {
-            this.addAction(contentHeight + 8, 'Achievements', UMBER, '#5c4634', () => {
-                void showPlayAchievements();
-            });
-        }
+        this.addAction(contentHeight + 8, 'Achievements', UMBER, '#5c4634', () => {
+            this.openAchievements();
+        });
 
-        const resetY = contentHeight + (playGamesAvailable() ? 64 : 8);
+        const resetY = contentHeight + 64;
         const reset = this.addAction(resetY, 'Reset my progress', '#7a3d2e', '#5c2c20', () => {
             this.onReset(reset);
         });
@@ -151,6 +151,11 @@ export class SettingsScene extends Scene {
     private tintOnHover (text: GameObjects.Text, rest: string, hover: string): void {
         text.on('pointerover', () => text.setColor(hover));
         text.on('pointerout', () => text.setColor(rest));
+    }
+
+    private openAchievements (): void {
+        this.scene.stop();
+        this.scene.launch('AchievementsScene');
     }
 
     private onReset (button: GameObjects.Text): void {

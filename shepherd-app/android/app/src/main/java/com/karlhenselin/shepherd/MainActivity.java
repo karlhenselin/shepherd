@@ -1,5 +1,6 @@
 package com.karlhenselin.shepherd;
 
+import android.content.res.Configuration;
 import android.os.Bundle;
 import android.view.View;
 import android.view.Window;
@@ -17,6 +18,37 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         hideSystemBars();
         lockWebViewScroll();
+    }
+
+    /**
+     * Tablets on API 36+ may ignore landscape locks. Handle size/orientation
+     * ourselves so the WebView fills the window instead of letterboxing.
+     */
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        hideSystemBars();
+        refreshWebView();
+    }
+
+    private void refreshWebView() {
+        if (this.bridge == null) {
+            return;
+        }
+
+        WebView webView = this.bridge.getWebView();
+
+        if (webView == null) {
+            return;
+        }
+
+        webView.post(() -> {
+            webView.requestLayout();
+            webView.evaluateJavascript(
+                "window.dispatchEvent(new Event('shepherd-viewport'));",
+                null
+            );
+        });
     }
 
     /** Stop Android WebView rubber-banding from stealing list drags. */

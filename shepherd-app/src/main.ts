@@ -1,6 +1,7 @@
 import { Capacitor, SystemBars } from '@capacitor/core';
 import { bootAchievements } from './game/achievements/achievements';
 import StartGame from './game/main';
+import { installLandscapeGate } from './game/ui/landscapeGate';
 
 async function hideChrome (): Promise<void> {
     if (!Capacitor.isNativePlatform()) {
@@ -23,5 +24,6 @@ document.addEventListener('touchmove', (event) => {
 document.addEventListener('DOMContentLoaded', () => {
     void hideChrome();
     void bootAchievements();
-    StartGame('game-container');
+    const game = StartGame('game-container');
+    installLandscapeGate(game);
 });

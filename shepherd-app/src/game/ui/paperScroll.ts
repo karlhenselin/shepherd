@@ -15,8 +15,6 @@ export type PaperScrollOptions = {
     headerH?: number;
     footerH?: number;
     titleSize?: string;
-    /** Show a drag-friendly scrollbar inset from the phone edge. */
-    scrollbar?: boolean;
     onBack: () => void;
 };
 
@@ -44,7 +42,7 @@ export function createPaperScroll (scene: Scene, opts: PaperScrollOptions): Pape
     const pad = chromePad();
     const { width, height } = scene.scale;
     const cx = width / 2;
-    const scrollGutter = opts.scrollbar ? SCROLLBAR_INSET + 10 : 0;
+    const scrollGutter = SCROLLBAR_INSET + 10;
 
     scene.cameras.main.setBackgroundColor(PAPER);
 
@@ -147,7 +145,7 @@ export function createPaperScroll (scene: Scene, opts: PaperScrollOptions): Pape
         contentHeight = heightPx;
         scrollMin = Math.min(0, viewHeight - contentHeight);
 
-        if (!opts.scrollbar || scrollMin >= 0) {
+        if (scrollMin >= 0) {
             return;
         }
 
@@ -215,7 +213,7 @@ export function createPaperScroll (scene: Scene, opts: PaperScrollOptions): Pape
         }
 
         // Leave scrollbar hit strip to thumb/track handlers.
-        if (opts.scrollbar && pointer.x >= width - pad.right - SCROLLBAR_INSET - SCROLLBAR_HIT / 2) {
+        if (pointer.x >= width - pad.right - SCROLLBAR_INSET - SCROLLBAR_HIT / 2) {
             return;
         }
 

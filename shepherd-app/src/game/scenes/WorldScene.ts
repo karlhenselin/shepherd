@@ -3320,6 +3320,7 @@ export class WorldScene extends Scene {
         this.nightVeil.setAlpha(0);
         this.sleepVeil.setAlpha(0);
         this.penTableStarted = false;
+        this.setTreeShadesVisible(true);
         this.styleCueForDay();
         stopHowling();
         this.destroyAllWolves();
@@ -3402,6 +3403,7 @@ export class WorldScene extends Scene {
         this.nightStarted = false;
         this.nightDarkAt = 0;
         this.nightFadeInMs = 0;
+        this.setTreeShadesVisible(true);
         // Restore HUD cue layout before speakLines shows the flock cue again.
         this.styleCueForDay();
         this.shepherd.wake();
@@ -3596,11 +3598,18 @@ export class WorldScene extends Scene {
         this.wolf.setAggressive(true);
     }
 
+    private setTreeShadesVisible (visible: boolean): void {
+        for (const tree of this.trees) {
+            tree.setShadeVisible(visible);
+        }
+    }
+
     private applyNight (animate: boolean): void {
         this.nightStarted = true;
         this.nightDarkAt = this.time.now;
         this.nightFadeInMs = animate ? NIGHT_FADE_IN_MS : 0;
         this.ensurePen();
+        this.setTreeShadesVisible(false);
         // Day seek must not survive night — morning (and night saves) start at 0.
         fadeOutWorldMusic(this, animate ? NIGHT_FADE_IN_MS : 0, true);
 
