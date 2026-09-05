@@ -771,7 +771,8 @@ export class WorldScene extends Scene {
 
         if (!this.heardPsalm2b) {
             this.heardPsalm2b = true;
-            this.playLines([
+            // Queue behind gem / other scripture; sheep already started drinking.
+            this.continueLines([
                 psalm23Half(2, 'b')
             ], () => {
                 this.spawnNextSheep();
@@ -781,13 +782,14 @@ export class WorldScene extends Scene {
 
         const verseId = nextWaterVerseId(this.foundWaterVerses);
 
-        if (!verseId || this.scriptPlaying) {
+        if (!verseId) {
             return;
         }
 
         this.foundWaterVerses.push(verseId);
         this.saveProgress(this.lastCheckpoint ?? 'found-gem');
-        this.playLines([
+        // Drink starts immediately; speech waits if a Bible gem (or other script) is talking.
+        this.continueLines([
             'The flock is drinking.',
             waterVerseLine(verseId)
         ]);

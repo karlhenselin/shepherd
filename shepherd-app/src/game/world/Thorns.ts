@@ -15,6 +15,10 @@ const MOUND_DEPTH = 2.35;
 const DEFAULT_STEM_ORIGIN = 0.64;
 /** Foliage alpha while a sheep is nestled inside (easier to see / bandage). */
 const SNARE_FOLIAGE_ALPHA = 0.48;
+/** After rescue: keep the soft canopy this long before restoring. */
+const SNARE_RESTORE_HOLD_MS = 10_000;
+/** Fade foliage back to full opacity over this many ms. */
+const SNARE_RESTORE_FADE_MS = 5_000;
 
 const stemOriginY: Record<string, number> = {};
 
@@ -67,12 +71,26 @@ export class Thorns {
 
     /** Soften the canopy so a snared sheep reads clearly. */
     revealSnare (): void {
+        this.sprite.scene.tweens.killTweensOf(this.sprite);
         this.sprite.setAlpha(SNARE_FOLIAGE_ALPHA);
     }
 
-    /** Restore full foliage after the sheep is freed. */
+    /** After rescue: hold the soft canopy, then fade foliage back in. */
     hideSnare (): void {
-        this.sprite.setAlpha(1);
+        const scene = this.sprite.scene;
+        scene.tweens.killTweensOf(this.sprite);
+
+        if (this.sprite.alpha >= 1) {
+            return;
+        }
+
+        scene.tweens.add({
+            targets: this.sprite,
+            alpha: 1,
+            delay: SNARE_RESTORE_HOLD_MS,
+            duration: SNARE_RESTORE_FADE_MS,
+            ease: 'Sine.easeInOut'
+        });
     }
 
     private applyLook (plantKey: string): void {
