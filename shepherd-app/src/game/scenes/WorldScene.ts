@@ -46,6 +46,7 @@ import { chromePad, cuePad, isPhoneChrome, makeHudInteractive } from '../ui/chro
 import { SETTINGS_GEAR_KEY, SETTINGS_GEAR_SIZE, ensureSettingsGear } from '../ui/settingsGear';
 import { SOUND_ICON_SIZE, ensureSoundIcons, soundIconKey } from '../ui/soundIcon';
 import { TREASURE_CHEST_KEY, TREASURE_CHEST_SIZE, ensureTreasureChest } from '../ui/treasureChest';
+import { ABC_KEYBOARD_KEY, ABC_KEYBOARD_SIZE, ensureAbcKeyboardIcon } from '../ui/abcKeyboardIcon';
 import { applyAchievements, syncAchievements } from '../achievements/achievements';
 import { GameSave, StoryCheckpoint, loadSave, writeSave, clearSave } from '../save/gameSave';
 
@@ -238,6 +239,7 @@ export class WorldScene extends Scene {
     private cueText!: GameObjects.Text;
     private soundToggle!: GameObjects.Image;
     private hudSettings!: GameObjects.Image;
+    private hudAbc!: GameObjects.Image;
     private hudChest!: GameObjects.Image;
     private hudCheat!: GameObjects.Text;
     private analogStick!: AnalogStick;
@@ -249,6 +251,8 @@ export class WorldScene extends Scene {
     private wellDoneStarted = false;
     private sawWellDone = false;
     private returningToIntro = false;
+    /** When true, scene pause must not stop BGM (minigame keeps the same tracks). */
+    private keepMusicThroughPause = false;
     /** Gem verses waiting until the current spoken script finishes. */
     private gemVerseQueue: string[] = [];
     /** Story lines waiting until the current spoken script finishes (do not cancel it). */
@@ -314,7 +318,10 @@ export class WorldScene extends Scene {
         }
 
         this.events.on(Scenes.Events.PAUSE, () => this.holdWorldAudio());
-        this.events.on(Scenes.Events.RESUME, () => this.releaseWorldAudio());
+        this.events.on(Scenes.Events.RESUME, () => {
+            this.keepMusicThroughPause = false;
+            this.releaseWorldAudio();
+        });
         this.game.events.on('blur', this.holdWorldAudio, this);
         this.game.events.on('hidden', this.holdWorldAudio, this);
         this.game.events.on('focus', this.releaseWorldAudio, this);
@@ -1668,6 +1675,7 @@ export class WorldScene extends Scene {
     private addSettingsButton (): void {
         ensureSettingsGear(this);
         ensureSoundIcons(this);
+        ensureAbcKeyboardIcon(this);
         ensureTreasureChest(this);
 
         const settings = this.add.image(0, 0, SETTINGS_GEAR_KEY)
@@ -1696,6 +1704,20 @@ export class WorldScene extends Scene {
         this.soundToggle.on('pointerdown', (_pointer: unknown, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
             event.stopPropagation();
             this.toggleSound();
+        });
+
+        const abc = this.add.image(0, 0, ABC_KEYBOARD_KEY)
+            .setDisplaySize(ABC_KEYBOARD_SIZE, ABC_KEYBOARD_SIZE)
+            .setScrollFactor(0)
+            .setDepth(23);
+
+        makeHudInteractive(abc);
+        abc.setData('ui', true);
+        abc.on('pointerover', () => abc.setTint(0xc4a882));
+        abc.on('pointerout', () => abc.clearTint());
+        abc.on('pointerdown', (_pointer: unknown, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
+            event.stopPropagation();
+            this.openMinigame();
         });
 
         const chest = this.add.image(0, 0, TREASURE_CHEST_KEY)
@@ -1730,13 +1752,14 @@ export class WorldScene extends Scene {
         });
 
         this.hudSettings = settings;
+        this.hudAbc = abc;
         this.hudChest = chest;
         this.hudCheat = cheat;
         this.placeHudButtons();
     }
 
     private placeHudButtons (): void {
-        if (!this.hudSettings || !this.soundToggle || !this.hudChest || !this.hudCheat) {
+        if (!this.hudSettings || !this.soundToggle || !this.hudAbc || !this.hudChest || !this.hudCheat) {
             return;
         }
 
@@ -1753,8 +1776,12 @@ export class WorldScene extends Scene {
             this.hudSettings.x - this.hudSettings.displayWidth - 12,
             y
         );
-        this.hudChest.setOrigin(1, originY).setPosition(
+        this.hudAbc.setOrigin(1, originY).setPosition(
             this.soundToggle.x - this.soundToggle.displayWidth - 12,
+            y
+        );
+        this.hudChest.setOrigin(1, originY).setPosition(
+            this.hudAbc.x - this.hudAbc.displayWidth - 12,
             y
         );
         this.hudCheat.setOrigin(1, originY).setPosition(
@@ -1765,7 +1792,6 @@ export class WorldScene extends Scene {
 
     private layoutChrome (): void {
         const { width, height } = this.scale;
-        const pad = chromePad();
         this.nightVeil?.setSize(width, height);
         this.sleepVeil?.setSize(width, height);
         this.placeHudButtons();
@@ -2254,7 +2280,9 @@ export class WorldScene extends Scene {
     private holdWorldAudio (): void {
         suspendHowling();
         holdSheepSounds(this);
-        stopWorldMusic(this);
+        if (!this.keepMusicThroughPause) {
+            stopWorldMusic(this);
+        }
         hushSpeech();
     }
 
@@ -2272,7 +2300,8 @@ export class WorldScene extends Scene {
         return this.scene.isActive('SettingsScene')
             || this.scene.isActive('TreasureScene')
             || this.scene.isActive('AchievementsScene')
-            || this.scene.isActive('CheatScene');
+            || this.scene.isActive('CheatScene')
+            || this.scene.isActive('MinigameScene');
     }
 
     private onWorldResume (): void {
@@ -2383,6 +2412,18 @@ export class WorldScene extends Scene {
                     .map((sheep) => sheep.name)
             }
         });
+    }
+
+    private openMinigame (): void {
+        if (this.overlayOpen()) {
+            return;
+        }
+
+        pauseSpeech();
+        // Stay set until RESUME so blur/hidden during the overlay don't stop BGM.
+        this.keepMusicThroughPause = true;
+        this.scene.pause();
+        this.scene.launch('MinigameScene');
     }
 
     private beginNight (): void {
@@ -2542,11 +2583,14 @@ export class WorldScene extends Scene {
             this.lastGoldStone = null;
         }
 
+        // Never place a stone farther from the shepherd than the city itself.
+        const maxFromPlayer = Math.min(GOLD_MAX_FROM_PLAYER, dist);
+
         if (this.lastGoldStone) {
             const lastDx = this.lastGoldStone.x - sx;
             const lastDy = this.lastGoldStone.y - sy;
 
-            if (Math.hypot(lastDx, lastDy) >= GOLD_MAX_FROM_PLAYER
+            if (Math.hypot(lastDx, lastDy) >= maxFromPlayer
                 && lastDx * heading.x + lastDy * heading.y > 0) {
                 return;
             }
@@ -2571,7 +2615,7 @@ export class WorldScene extends Scene {
             dirX = (fromLastX / fromLastLen) * GOLD_FROM_LAST + heading.x * (1 - GOLD_FROM_LAST);
             dirY = (fromLastY / fromLastLen) * GOLD_FROM_LAST + heading.y * (1 - GOLD_FROM_LAST);
             stepFrom = GOLD_SPACING;
-            stepTo = Math.hypot(sx - lx, sy - ly) + GOLD_MAX_FROM_PLAYER;
+            stepTo = Math.hypot(sx - lx, sy - ly) + maxFromPlayer;
         }
 
         const dirLen = Math.hypot(dirX, dirY) || 1;
@@ -2583,7 +2627,7 @@ export class WorldScene extends Scene {
             const x = originX + dirX * alongDist;
             const y = originY + dirY * alongDist;
 
-            if (Math.hypot(x - sx, y - sy) > GOLD_MAX_FROM_PLAYER) {
+            if (Math.hypot(x - sx, y - sy) > maxFromPlayer) {
                 continue;
             }
 

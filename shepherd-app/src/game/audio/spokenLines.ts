@@ -1,6 +1,7 @@
 import {
     BIBLE_GEMS,
     CORINTHIANS_15_51,
+    GENESIS_1_1,
     ISAIAH_11_6,
     ISAIAH_53_6,
     ISAIAH_65_25,
@@ -20,6 +21,7 @@ import {
     psalm23Comfort,
     psalm23FiveTable,
     psalm23Half,
+    psalm23Six,
     revelation21CityLine,
     scriptureLine
 } from '../data/scripture';
@@ -115,6 +117,8 @@ export function allSpokenLines (): string[] {
         }
     }
 
+    // Story / treasure / minigame scripture (scriptureLine form must match speakCue).
+    lines.add(scriptureLine(GENESIS_1_1));
     lines.add(psalm23Half(1, 'a'));
     lines.add(psalm23Half(1, 'b'));
     lines.add(psalm23Half(2, 'a'));
@@ -125,6 +129,8 @@ export function allSpokenLines (): string[] {
     lines.add(psalm23Half(4, 'b'));
     lines.add(psalm23Comfort());
     lines.add(psalm23FiveTable());
+    lines.add(psalm23Six('a'));
+    lines.add(psalm23Six('b'));
     lines.add(isaiah53Line());
     lines.add(isaiah11WolfLine());
     lines.add(isaiah11LionLine());
@@ -138,6 +144,8 @@ export function allSpokenLines (): string[] {
     lines.add(john14Line());
     lines.add(corinthians15Line());
     lines.add(scriptureLine(PSALM_23[5].table));
+    lines.add(scriptureLine(PSALM_23[6].a));
+    lines.add(scriptureLine(PSALM_23[6].b));
     lines.add(scriptureLine(JOHN_10[2]));
     lines.add(scriptureLine(JOHN_10[9]));
     lines.add(scriptureLine(JOHN_14_6));

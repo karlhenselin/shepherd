@@ -3,8 +3,14 @@ import { foundBibleGems, scriptureLine, unlockedStoryPassages } from '../data/sc
 import { foundTreeVerses } from '../data/treeVerses';
 import { foundWaterVerses } from '../data/waterVerses';
 import { foundThornVerses } from '../data/thornVerses';
+import { buildTreasurePracticeQueue, type MinigamePassage } from '../data/minigameVerses';
 import { loadSave } from '../save/gameSave';
 import { createPaperScroll, DRAG_CLICK_SLOP, type PaperScroll } from '../ui/paperScroll';
+import {
+    ABC_KEYBOARD_KEY,
+    ABC_KEYBOARD_LIST_SIZE,
+    ensureAbcKeyboardIcon
+} from '../ui/abcKeyboardIcon';
 import { speakCue, stopSpeech } from '../ui/speech';
 
 const UMBER = '#3d2c1e';
@@ -15,6 +21,7 @@ const LINK_HOVER = '#1a3344';
 
 export class TreasureScene extends Scene {
     private scroll!: PaperScroll;
+    private unlockedPassages: MinigamePassage[] = [];
 
     constructor () {
         super('TreasureScene');
@@ -27,6 +34,8 @@ export class TreasureScene extends Scene {
         foundThornVerses?: string[];
         heard?: Parameters<typeof unlockedStoryPassages>[0];
     }): void {
+        ensureAbcKeyboardIcon(this);
+
         const save = loadSave();
         const foundIds = data?.foundGems ?? save?.foundGems ?? [];
         const waterIds = data?.foundWaterVerses ?? save?.foundWaterVerses ?? [];
@@ -51,6 +60,13 @@ export class TreasureScene extends Scene {
             foundNames: save?.foundNames
         };
 
+        const gems = foundBibleGems(foundIds);
+        const water = foundWaterVerses(waterIds);
+        const trees = foundTreeVerses(treeIds);
+        const thorns = foundThornVerses(thornIds);
+        const story = unlockedStoryPassages(heard);
+        this.unlockedPassages = [...gems, ...water, ...trees, ...thorns, ...story];
+
         this.scroll = createPaperScroll(this, {
             title: 'Bible Treasures',
             titleSize: '40px',
@@ -65,11 +81,11 @@ export class TreasureScene extends Scene {
         );
 
         let y = 0;
-        y = this.addSection(y, 'Bible gems', foundBibleGems(foundIds), wrap, true);
-        y = this.addSection(y, 'Water and thirst', foundWaterVerses(waterIds), wrap, true);
-        y = this.addSection(y, 'Shade of the trees', foundTreeVerses(treeIds), wrap, true);
-        y = this.addSection(y, 'Thorns', foundThornVerses(thornIds), wrap, true);
-        y = this.addSection(y, 'Along the way', unlockedStoryPassages(heard), wrap, true);
+        y = this.addSection(y, 'Bible gems', gems, wrap, true);
+        y = this.addSection(y, 'Water and thirst', water, wrap, true);
+        y = this.addSection(y, 'Shade of the trees', trees, wrap, true);
+        y = this.addSection(y, 'Thorns', thorns, wrap, true);
+        y = this.addSection(y, 'Along the way', story, wrap, true);
         this.scroll.finish(y);
 
         this.events.once(Scenes.Events.SHUTDOWN, () => stopSpeech());
@@ -115,6 +131,17 @@ export class TreasureScene extends Scene {
                 align: 'center'
             }).setOrigin(0.5, 0);
             this.scroll.root.add(ref);
+
+            const abc = this.add.image(
+                ref.displayWidth / 2 + 18,
+                y + ref.height / 2,
+                ABC_KEYBOARD_KEY
+            )
+                .setDisplaySize(ABC_KEYBOARD_LIST_SIZE, ABC_KEYBOARD_LIST_SIZE)
+                .setOrigin(0, 0.5);
+            this.scroll.root.add(abc);
+            this.makeAbcButton(abc, passage);
+
             y += 26;
 
             const body = this.add.text(0, y, passage.text, {
@@ -133,6 +160,29 @@ export class TreasureScene extends Scene {
         }
 
         return y + 18;
+    }
+
+    private makeAbcButton (abc: GameObjects.Image, passage: { ref: string; text: string }): void {
+        abc.setInteractive({ useHandCursor: true });
+        abc.on('pointerover', () => abc.setTint(0xc4a882));
+        abc.on('pointerout', () => abc.clearTint());
+        abc.on('pointerup', (pointer: { y: number }) => {
+            if (this.scroll.dragDistance > DRAG_CLICK_SLOP || !this.scroll.inBand(pointer.y)) {
+                return;
+            }
+
+            this.openMinigame(passage);
+        });
+    }
+
+    private openMinigame (passage: { ref: string; text: string }): void {
+        stopSpeech();
+        const queue = buildTreasurePracticeQueue(passage, this.unlockedPassages);
+        this.scene.launch('MinigameScene', {
+            queue,
+            returnTo: 'TreasureScene'
+        });
+        this.scene.stop();
     }
 
     private makeSpeakable (ref: GameObjects.Text, body: GameObjects.Text, line: string): void {

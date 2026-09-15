@@ -1,0 +1,19 @@
+First of the Flock,Find your first sheep.,False,,Revealed,5,1
+Full Flock,Bring all four sheep into your flock.,False,,Revealed,10,2
+Green Pastures,Lead the flock to green pastures.,False,,Revealed,10,3
+Quiet Waters,Lead the flock to still water.,False,,Revealed,10,4
+He Restores My Soul,Bandage the hurt sheep.,False,,Revealed,10,5
+Paths of Righteousness,Walk the righteous path after healing.,False,,Revealed,10,6
+Valley of the Shadow,Guide the flock toward the pen as night falls.,False,,Revealed,15,7
+Fear No Evil,Keep walking while wolves howl in the night.,False,,Revealed,15,8
+Comfort of the Staff,Pick up the shepherd's staff.,False,,Revealed,15,9
+You Prepare a Table,Hear the table prepared in the presence of enemies.,False,,Revealed,15,10
+The Gate,Become the gate as the flock rests in the pen.,False,,Hidden,25,11
+We Shall All Be Changed,Hear the mystery at the fold.,False,,Hidden,25,12
+Entered the City,Enter Jerusalem with the flock.,False,,Hidden,200,13
+First Bible Gem,Find your first Bible gem in the world.,False,,Revealed,5,14
+Gem Collector,Find twenty-five Bible gems.,True,25,Revealed,50,15
+Bible Treasure Hunter,Find every Bible gem in the world.,True,50,Revealed,100,16
+Living Water,Discover every wayside water verse.,True,20,Revealed,50,17
+Under the Shade,Discover every shade tree verse.,True,20,Revealed,50,18
+Well Done,Finish the journey and hear the faithful servant blessing.,False,,Hidden,200,19

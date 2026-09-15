@@ -76,7 +76,9 @@ export function getWorldMusicProgress (scene: Scene): { key: WorldMusicKey; seek
 }
 
 function stillInWorld (scene: Scene): boolean {
-    return scene.sys.isActive() || scene.sys.isPaused();
+    // isActive() is only true for RUNNING; Scene.create() runs under CREATING
+    // with settings.active already true (see Systems.start).
+    return scene.sys.settings.active || scene.sys.isPaused();
 }
 
 function audioContextOf (scene: Scene): AudioContext | null {

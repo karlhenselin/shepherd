@@ -7,6 +7,17 @@ const ROAR_SECONDS = 1.9;
 
 let noiseBuffer: AudioBuffer | null = null;
 
+/** Full celebration roar (minigame verse clear, etc.). */
+export function playLionRoar (
+    scene: Scene,
+    volume = 0.85,
+    onComplete?: () => void
+): boolean {
+    const pitch = 1.05 + Math.random() * 0.08;
+    const played = playRoar(scene, volume, 0, pitch, onComplete);
+    return played;
+}
+
 export function playFriendlyLionRoar (
     scene: Scene,
     sheep: FlockBehavior,
@@ -24,19 +35,6 @@ export function playFriendlyLionRoar (
         return true;
     }
 
-    const sound = scene.sound as { context?: AudioContext };
-    const ctx = sound.context;
-
-    if (!(ctx instanceof AudioContext)) {
-        return false;
-    }
-
-    if (ctx.state !== 'running') {
-        void ctx.resume();
-        return false;
-    }
-
-    const now = ctx.currentTime;
     const dx = sheep.sprite.x - listener.x;
     const dy = sheep.sprite.y - listener.y;
     const dist = Math.hypot(dx, dy);
@@ -44,19 +42,74 @@ export function playFriendlyLionRoar (
     const volume = (0.48 + 0.42 * falloff) * (0.92 + Math.random() * 0.12);
     const pitch = 1.12 + Math.random() * 0.1;
 
+    return playRoar(scene, volume, stereoPan(scene, sheep.sprite.x), pitch);
+}
+
+function playRoar (
+    scene: Scene,
+    volume: number,
+    panValue: number,
+    pitch: number,
+    onComplete?: () => void
+): boolean {
+    const lingerMs = (ROAR_SECONDS / pitch + 0.08) * 1000;
+
+    const finish = (): void => {
+        onComplete?.();
+    };
+
+    if (!isDocumentAudioLive() || !scene.sys.isActive() || scene.sys.isPaused()) {
+        if (onComplete) {
+            window.setTimeout(finish, lingerMs);
+        }
+        return false;
+    }
+
+    if (scene.sound.locked || scene.sound.gameLostFocus) {
+        if (onComplete) {
+            window.setTimeout(finish, lingerMs);
+        }
+        return false;
+    }
+
+    if (!isSoundOn()) {
+        if (onComplete) {
+            window.setTimeout(finish, lingerMs);
+        }
+        return true;
+    }
+
+    const sound = scene.sound as { context?: AudioContext };
+    const ctx = sound.context;
+
+    if (!(ctx instanceof AudioContext)) {
+        if (onComplete) {
+            window.setTimeout(finish, lingerMs);
+        }
+        return false;
+    }
+
+    if (ctx.state !== 'running') {
+        void ctx.resume();
+        if (onComplete) {
+            window.setTimeout(finish, lingerMs);
+        }
+        return false;
+    }
+
+    const now = ctx.currentTime;
+
     const master = ctx.createGain();
     master.gain.value = volume;
 
     const pan = ctx.createStereoPanner();
-    pan.pan.value = stereoPan(scene, sheep.sprite.x);
+    pan.pan.value = panValue;
 
     master.connect(pan);
     pan.connect(ctx.destination);
 
     addRoarBody(ctx, master, now, pitch);
     addChuff(ctx, master, now, pitch);
-
-    const linger = ROAR_SECONDS / pitch + 0.08;
 
     window.setTimeout(() => {
         try {
@@ -66,7 +119,8 @@ export function playFriendlyLionRoar (
         catch {
             // already torn down
         }
-    }, linger * 1000);
+        finish();
+    }, lingerMs);
 
     return true;
 }
