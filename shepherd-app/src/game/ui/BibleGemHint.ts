@@ -1,4 +1,4 @@
-import { GameObjects, Scene } from 'phaser';
+import { GameObjects, Scene, Tweens } from 'phaser';
 import { Shepherd } from '../entities/Shepherd';
 
 /** Closer to the shepherd than the lost-sheep hint so both can show at once. */
@@ -6,13 +6,44 @@ const OFFSET = 88;
 const HIDE_PADDING = 90;
 
 export class BibleGemHint {
+    private readonly scene: Scene;
     private readonly arrow: GameObjects.Image;
+    private pulseTween: Tweens.Tween | null = null;
+    private forceVisible = false;
+    private readonly baseScale: number;
 
     constructor (scene: Scene) {
         ensureHintTexture(scene);
+        this.scene = scene;
         this.arrow = scene.add.image(0, 0, 'bible-gem-hint');
         this.arrow.setDepth(18);
         this.arrow.setVisible(false);
+        this.baseScale = this.arrow.scaleX;
+    }
+
+    /** Pulse + stay visible (even on-screen) for a short teaching beat. */
+    pulse (durationMs = 4000): void {
+        this.stopPulse();
+        this.forceVisible = true;
+        this.pulseTween = this.scene.tweens.add({
+            targets: this.arrow,
+            scaleX: this.baseScale * 1.32,
+            scaleY: this.baseScale * 1.32,
+            alpha: { from: 0.55, to: 1 },
+            duration: 480,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+        this.scene.time.delayedCall(durationMs, () => this.stopPulse());
+    }
+
+    stopPulse (): void {
+        this.forceVisible = false;
+        this.pulseTween?.stop();
+        this.pulseTween = null;
+        this.arrow.setScale(this.baseScale);
+        this.arrow.setAlpha(1);
     }
 
     update (scene: Scene, shepherd: Shepherd, target: { x: number; y: number } | null): void {
@@ -21,7 +52,7 @@ export class BibleGemHint {
             return;
         }
 
-        if (isOnScreen(scene, target.x, target.y)) {
+        if (!this.forceVisible && isOnScreen(scene, target.x, target.y)) {
             this.arrow.setVisible(false);
             return;
         }

@@ -14,4 +14,6 @@ ext {
     androidxEspressoCoreVersion = '3.7.0'
     cordovaAndroidVersion = '14.0.1'
     kotlin_version = '2.1.20'
+    // Match @idleflowgames/capacitor-play-games (play-services-games-v2 minSdk 24).
+    playServicesGamesV2Version = '22.0.0'
 }

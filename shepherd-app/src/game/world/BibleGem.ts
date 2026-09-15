@@ -28,6 +28,10 @@ export const WORLD_GEM_LIMIT = 20;
 const MIN_FROM_PLAYER = REGION_WIDTH * 0.9;
 /** Soft floor so replacements do not land on top of an existing gem. */
 const MIN_FROM_GEMS = REGION_WIDTH * 0.85;
+/** Hard floor for a gem spawned after a pickup — never near the shepherd. */
+const MIN_REPLACEMENT_FROM_PLAYER = 700;
+/** Margin outside the camera for “off-screen” replacement picks. */
+const OFFSCREEN_PAD = 120;
 
 type RegionCell = { col: number; row: number };
 
@@ -131,9 +135,17 @@ export function spawnBibleGemAway (
         return null;
     }
 
+    const view = scene.cameras.main.worldView;
     const used = occupiedRegions(present);
-    const cell = nextSpreadRegion(awayFrom, present, used, present.length + collected.length);
-    const at = spotInRegion(cell, awayFrom, present, present.length + collected.length);
+    const cell = nextSpreadRegion(awayFrom, present, used, present.length + collected.length, view);
+    const at = spotInRegion(
+        cell,
+        awayFrom,
+        present,
+        present.length + collected.length,
+        MIN_REPLACEMENT_FROM_PLAYER,
+        view
+    );
 
     return new BibleGem(scene, id, at.x, at.y);
 }
@@ -192,7 +204,8 @@ function nextSpreadRegion (
     player: { x: number; y: number },
     others: { x: number; y: number }[],
     used: Set<string>,
-    salt: number
+    salt: number,
+    view?: { x: number; y: number; right: number; bottom: number }
 ): RegionCell {
     const free = eligibleRegions().filter((cell) => !used.has(regionKey(cell)));
     const candidates = free.length > 0 ? free : eligibleRegions();
@@ -213,7 +226,9 @@ function nextSpreadRegion (
             fromGems = fromPlayer;
         }
 
-        const score = fromGems + fromPlayer * 0.15 + rng() * 8;
+        // Strongly prefer spots off the current camera.
+        const offScreenBonus = view && !isInView(at, view) ? REGION_WIDTH * 2 : 0;
+        const score = fromGems + fromPlayer * 0.55 + offScreenBonus + rng() * 8;
 
         if (score > bestScore) {
             bestScore = score;
@@ -228,35 +243,122 @@ function spotInRegion (
     cell: RegionCell,
     player: { x: number; y: number },
     others: { x: number; y: number }[],
-    salt: number
+    salt: number,
+    minFromPlayer = MIN_FROM_PLAYER,
+    view?: { x: number; y: number; right: number; bottom: number }
 ): { x: number; y: number } {
+    const trySpot = (at: { x: number; y: number }): boolean =>
+        isClearSpot(at, player, others, minFromPlayer)
+        && (!view || !isInView(at, view));
+
     const primary = jitteredRegion(cell.col, cell.row, salt);
 
-    if (isClearSpot(primary, player, others)) {
+    if (trySpot(primary)) {
         return primary;
     }
 
     for (let nudge = 1; nudge <= 8; nudge++) {
         const alt = jitteredRegion(cell.col, cell.row, salt + nudge * 31);
 
-        if (isClearSpot(alt, player, others)) {
+        if (trySpot(alt)) {
             return alt;
         }
     }
 
-    return primary;
+    // Relax off-screen requirement but keep distance.
+    if (isClearSpot(primary, player, others, minFromPlayer)) {
+        return primary;
+    }
+
+    for (let nudge = 1; nudge <= 8; nudge++) {
+        const alt = jitteredRegion(cell.col, cell.row, salt + nudge * 31);
+
+        if (isClearSpot(alt, player, others, minFromPlayer)) {
+            return alt;
+        }
+    }
+
+    // Last resort: search other regions for a distant clear spot.
+    const escape = findDistantClearSpot(player, others, salt, minFromPlayer, view);
+
+    return escape ?? primary;
+}
+
+function findDistantClearSpot (
+    player: { x: number; y: number },
+    others: { x: number; y: number }[],
+    salt: number,
+    minFromPlayer: number,
+    view?: { x: number; y: number; right: number; bottom: number }
+): { x: number; y: number } | null {
+    let best: { x: number; y: number } | null = null;
+    let bestDist = -1;
+
+    for (const cell of eligibleRegions()) {
+        for (let nudge = 0; nudge < 4; nudge++) {
+            const at = jitteredRegion(cell.col, cell.row, salt + nudge * 17);
+
+            if (!isClearSpot(at, player, others, minFromPlayer)) {
+                continue;
+            }
+
+            if (view && isInView(at, view)) {
+                continue;
+            }
+
+            const dist = Math.hypot(at.x - player.x, at.y - player.y);
+
+            if (dist > bestDist) {
+                bestDist = dist;
+                best = at;
+            }
+        }
+    }
+
+    if (best) {
+        return best;
+    }
+
+    // Accept on-screen if nothing else is far enough.
+    for (const cell of eligibleRegions()) {
+        const at = jitteredRegion(cell.col, cell.row, salt + 99);
+
+        if (!isClearSpot(at, player, others, minFromPlayer)) {
+            continue;
+        }
+
+        const dist = Math.hypot(at.x - player.x, at.y - player.y);
+
+        if (dist > bestDist) {
+            bestDist = dist;
+            best = at;
+        }
+    }
+
+    return best;
 }
 
 function isClearSpot (
     at: { x: number; y: number },
     player: { x: number; y: number },
-    others: { x: number; y: number }[]
+    others: { x: number; y: number }[],
+    minFromPlayer = MIN_FROM_PLAYER
 ): boolean {
-    if (Math.hypot(at.x - player.x, at.y - player.y) < MIN_FROM_PLAYER) {
+    if (Math.hypot(at.x - player.x, at.y - player.y) < minFromPlayer) {
         return false;
     }
 
     return others.every((other) => Math.hypot(at.x - other.x, at.y - other.y) >= MIN_FROM_GEMS);
+}
+
+function isInView (
+    at: { x: number; y: number },
+    view: { x: number; y: number; right: number; bottom: number }
+): boolean {
+    return at.x > view.x - OFFSCREEN_PAD
+        && at.x < view.right + OFFSCREEN_PAD
+        && at.y > view.y - OFFSCREEN_PAD
+        && at.y < view.bottom + OFFSCREEN_PAD;
 }
 
 function fallbackCell (

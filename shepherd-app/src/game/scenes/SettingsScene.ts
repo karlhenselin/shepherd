@@ -40,7 +40,6 @@ export class SettingsScene extends Scene {
         this.scroll = createPaperScroll(this, {
             title: 'Settings',
             headerH: 64,
-            footerH: 88,
             onBack: () => this.close()
         });
 

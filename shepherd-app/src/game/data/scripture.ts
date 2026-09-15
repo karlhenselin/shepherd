@@ -276,6 +276,7 @@ export type StoryPassageFlags = {
     heardPsalm6?: boolean;
     heardJohn102?: boolean;
     heardJohn109?: boolean;
+    heardJohn1011?: boolean;
     heardCorinthians?: boolean;
     heardCity?: boolean;
     heardIsaiah6525?: boolean;
@@ -327,6 +328,10 @@ export function unlockedStoryPassages (flags: StoryPassageFlags): { ref: string;
 
     if (flags.heardJohn102) {
         unlocked.push(JOHN_10[2], JOHN_14_6);
+    }
+
+    if (flags.heardJohn1011) {
+        unlocked.push(JOHN_10[11]);
     }
 
     if (flags.heardJohn109) {

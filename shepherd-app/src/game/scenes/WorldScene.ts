@@ -1,4 +1,4 @@
-import { Scene, GameObjects, Geom, Scenes } from 'phaser';
+import { Scene, GameObjects, Geom, Scenes, Tweens, BlendModes } from 'phaser';
 import { Shepherd } from '../entities/Shepherd';
 import { Wolf, WOLF_ATTACK_RANGE } from '../entities/Wolf';
 import { Lion } from '../entities/Lion';
@@ -46,9 +46,9 @@ import { chromePad, cuePad, isPhoneChrome, makeHudInteractive } from '../ui/chro
 import { SETTINGS_GEAR_KEY, SETTINGS_GEAR_SIZE, ensureSettingsGear } from '../ui/settingsGear';
 import { SOUND_ICON_SIZE, ensureSoundIcons, soundIconKey } from '../ui/soundIcon';
 import { TREASURE_CHEST_KEY, TREASURE_CHEST_SIZE, ensureTreasureChest } from '../ui/treasureChest';
-import { ABC_KEYBOARD_KEY, ABC_KEYBOARD_SIZE, ensureAbcKeyboardIcon } from '../ui/abcKeyboardIcon';
+import { ABC_GLOW_KEY, ABC_KEYBOARD_KEY, ABC_KEYBOARD_SIZE, ensureAbcGlow, ensureAbcKeyboardIcon } from '../ui/abcKeyboardIcon';
 import { applyAchievements, syncAchievements } from '../achievements/achievements';
-import { GameSave, StoryCheckpoint, loadSave, writeSave, clearSave } from '../save/gameSave';
+import { GameSave, StoryCheckpoint, loadSave, writeSave, clearSave, markMinigameTried, markTreasureTried } from '../save/gameSave';
 
 const FLOCK_NAMES = ['Clover', 'Snowball', 'Milo', 'Biscuit'];
 const PEACEABLE_JOINERS = ['Leo', 'Sarah'] as const;
@@ -101,6 +101,12 @@ const TABLE_GATE_PAUSE_MS = 3000;
 const TABLE_GATE_WALK_SPEED = 58;
 /** Pause after the scare beat before speaking Psalm 23:4b. */
 const FEAR_NO_EVIL_DELAY_MS = 3000;
+/** Pause after Psalm 23:4b before the night wolf lesson. */
+const WOLF_LESSON_PAUSE_MS = 1400;
+/** Slow walk when the lesson wolf stalks toward the flock. */
+const WOLF_LESSON_APPROACH_SPEED = 72;
+/** Guided shepherd walk during the scare demo. */
+const WOLF_LESSON_GUIDE_SPEED = 110;
 /** Lion charge across the gate after the shepherd lies down. */
 const LION_CHARGE_SPEED = 210;
 /** Pack sprint once the lion closes in. */
@@ -118,8 +124,8 @@ const NIGHT_FADE_IN_MS = 2800;
 const RESTORE_FOLLOW_RING = 200;
 /** Timed belt-and-suspenders block on walk-into pets after create (find celebration bypasses). */
 const PETTING_SUPPRESS_MS = 3500;
-/** Shepherd must leave spawn by this much before walk-into pets unlock after a restore. */
-const PET_UNLOCK_MOVE_PX = 40;
+/** After a gem pickup, wait until the shepherd walks this far before spawning a replacement. */
+const GEM_RESPAWN_WALK = 600;
 
 /** Short cozy lines for walk-into pets (skipped while a scripture script is playing). */
 const PET_LINES: Array<(name: string) => string> = [
@@ -221,6 +227,8 @@ export class WorldScene extends Scene {
     private staffPickup: StaffPickup | null = null;
     private gems: BibleGem[] = [];
     private foundGems: string[] = [];
+    /** After a pickup, hold the replacement until the shepherd walks `GEM_RESPAWN_WALK`. */
+    private pendingGemSpawnFrom: { x: number; y: number } | null = null;
     private foundWaterVerses: string[] = [];
     private foundTreeVerses: string[] = [];
     private foundThornVerses: string[] = [];
@@ -240,7 +248,25 @@ export class WorldScene extends Scene {
     private soundToggle!: GameObjects.Image;
     private hudSettings!: GameObjects.Image;
     private hudAbc!: GameObjects.Image;
+    private abcGlow: GameObjects.Image | null = null;
+    private abcPulse: Tweens.Tween | null = null;
+    private abcGlowPulse: Tweens.Tween | null = null;
+    private abcBaseScale = 1;
+    private abcGlowBaseScale = 1;
+    /** Typing minigame unlocked after finding the second sheep. */
+    private triedMinigame = false;
     private hudChest!: GameObjects.Image;
+    private chestGlow: GameObjects.Image | null = null;
+    private chestPulse: Tweens.Tween | null = null;
+    private chestGlowPulse: Tweens.Tween | null = null;
+    private chestBaseScale = 1;
+    private chestGlowBaseScale = 1;
+    /** Bible Treasures unlocked after finding the first sheep. */
+    private triedTreasure = false;
+    /** White arrow main-quest tip spoken once at start. */
+    private heardQuestArrowTip = false;
+    /** Blue arrow Bible-verse tip spoken once after first feed. */
+    private heardGemArrowTip = false;
     private hudCheat!: GameObjects.Text;
     private analogStick!: AnalogStick;
     private bandageButton!: BandageButton;
@@ -285,6 +311,7 @@ export class WorldScene extends Scene {
     private heardPsalm6 = false;
     private heardJohn102 = false;
     private heardJohn109 = false;
+    private heardJohn1011 = false;
     private heardCorinthians = false;
     private heardCity = false;
     private heardIsaiah6525 = false;
@@ -365,8 +392,6 @@ export class WorldScene extends Scene {
             this.ensurePen(save.pen);
         }
 
-        this.ensureCity(save?.pen);
-
         const cue = cuePad();
         this.cueText = this.add.text(cue.x, cue.y, 'Find your sheep.', {
             fontFamily: 'Georgia, serif',
@@ -441,6 +466,7 @@ export class WorldScene extends Scene {
 
         this.playWorldMusic();
         this.pettingReadyAt = this.time.now + PETTING_SUPPRESS_MS;
+        this.scheduleQuestArrowTip();
 
         this.events.on(Scenes.Events.RESUME, this.onWorldResume, this);
         this.events.once(Scenes.Events.SHUTDOWN, () => {
@@ -561,6 +587,7 @@ export class WorldScene extends Scene {
         this.tickPetting();
         this.maybePickupStaff();
         this.maybeCollectGem();
+        this.maybeSpawnPendingGem();
         this.maybeFlockDrink();
         this.maybeStartFlockSip();
         this.maybeShadeTree();
@@ -679,6 +706,7 @@ export class WorldScene extends Scene {
         this.celebrateFinding(sheep);
 
         if (this.foundCount === 1) {
+            this.refreshTreasureHud();
             this.playLines([
                 `${sheep.name}! I found you!`,
                 psalm23Half(1, 'a')
@@ -689,6 +717,7 @@ export class WorldScene extends Scene {
         }
 
         if (this.foundCount === 2) {
+            this.refreshAbcHud();
             this.playLines([
                 `${sheep.name}! I found you!`
             ], () => {
@@ -759,7 +788,9 @@ export class WorldScene extends Scene {
         this.continueLines([
             psalm23Half(2, 'a'),
             isaiah53Line()
-        ]);
+        ], () => {
+            this.beginGemArrowTip();
+        });
     }
 
     /** After green pastures: flock may nibble nearby grass for the rest of the day. */
@@ -812,6 +843,12 @@ export class WorldScene extends Scene {
     }
 
     private playLines (lines: string[], onDone?: () => void): void {
+        // Never cancel an in-progress script (e.g. a Bible gem) — queue instead.
+        if (this.scriptPlaying) {
+            this.scriptQueue.push({ lines, onDone });
+            return;
+        }
+
         const id = ++this.scriptId;
         this.scriptPlaying = true;
         this.speakLines(id, lines, onDone);
@@ -819,11 +856,6 @@ export class WorldScene extends Scene {
 
     /** Play now, or after the current script, without cancelling that script's onDone. */
     private continueLines (lines: string[], onDone?: () => void): void {
-        if (this.scriptPlaying) {
-            this.scriptQueue.push({ lines, onDone });
-            return;
-        }
-
         this.playLines(lines, onDone);
     }
 
@@ -906,6 +938,73 @@ export class WorldScene extends Scene {
         }
 
         this.playLines(lines);
+    }
+
+    private scheduleQuestArrowTip (): void {
+        if (this.heardQuestArrowTip || this.foundCount > 0) {
+            return;
+        }
+
+        this.time.delayedCall(900, () => this.beginQuestArrowTip());
+    }
+
+    private beginQuestArrowTip (): void {
+        if (this.heardQuestArrowTip || this.foundCount > 0 || !this.sys.isActive()) {
+            return;
+        }
+
+        if (this.scriptPlaying) {
+            this.time.delayedCall(400, () => this.beginQuestArrowTip());
+            return;
+        }
+
+        if (!this.hintTarget()) {
+            return;
+        }
+
+        this.heardQuestArrowTip = true;
+        this.lostHint.pulse(4500);
+        this.playLines([
+            'The white arrow leads you to your main quest.'
+        ], () => {
+            this.lostHint.stopPulse();
+            this.persistArrowTips();
+            this.showCue(this.flockCue(), false);
+        });
+    }
+
+    private beginGemArrowTip (): void {
+        if (this.heardGemArrowTip || !this.heardPsalm2 || !this.sys.isActive()) {
+            return;
+        }
+
+        if (this.scriptPlaying) {
+            this.time.delayedCall(400, () => this.beginGemArrowTip());
+            return;
+        }
+
+        if (!this.gemHintTarget()) {
+            this.heardGemArrowTip = true;
+            this.persistArrowTips();
+            return;
+        }
+
+        this.heardGemArrowTip = true;
+        this.gemHint.pulse(5000);
+        this.playLines([
+            'The blue arrow points to the nearest Bible verse.',
+            'Collect them all.'
+        ], () => {
+            this.gemHint.stopPulse();
+            this.persistArrowTips();
+            this.showCue(this.flockCue(), false);
+        });
+    }
+
+    private persistArrowTips (): void {
+        if (this.lastCheckpoint) {
+            this.saveProgress(this.lastCheckpoint);
+        }
     }
 
     private makeFlockThirsty (): void {
@@ -1056,6 +1155,11 @@ export class WorldScene extends Scene {
 
     /** Nearest Bible gem, or trees/water that still have unread passages once gems are gone. */
     private gemHintTarget (): { x: number; y: number } | null {
+        // Unlock after the flock's first meal (green pastures).
+        if (!this.heardPsalm2) {
+            return null;
+        }
+
         if (this.gems.length > 0) {
             return this.closestToShepherd(this.gems);
         }
@@ -1078,17 +1182,36 @@ export class WorldScene extends Scene {
         return this.closestToShepherd(spots);
     }
 
-    /** When the gem hint has nothing left to point at, fade out and return to the intro. */
+    /** When collectible Bible content is finished, fade out and return to the intro. */
     private maybeBeginWellDone (): void {
         if (this.wellDoneStarted || this.overlayOpen() || this.scriptPlaying) {
             return;
         }
 
-        if (this.gemHintTarget()) {
+        // Verse collectibles unlock after the first meal — never end before that.
+        if (!this.heardPsalm2) {
             return;
         }
 
-        if (this.foundGems.length === 0 && this.gems.length === 0) {
+        // A replacement gem is waiting until the shepherd walks farther.
+        if (this.pendingGemSpawnFrom) {
+            return;
+        }
+
+        if (this.gems.length > 0 || this.foundGems.length < BIBLE_GEMS.length) {
+            return;
+        }
+
+        if (!this.nightStarted && !this.nightAfterTree
+            && nextTreeVerseId(this.foundTreeVerses, this.shepherd.wearsWhite)) {
+            return;
+        }
+
+        if (nextWaterVerseId(this.foundWaterVerses)) {
+            return;
+        }
+
+        if (this.foundGems.length === 0) {
             return;
         }
 
@@ -1420,6 +1543,7 @@ export class WorldScene extends Scene {
             heardPsalm6: this.heardPsalm6,
             heardJohn102: this.heardJohn102,
             heardJohn109: this.heardJohn109,
+            heardJohn1011: this.heardJohn1011,
             heardCorinthians: this.heardCorinthians,
             heardCity: this.heardCity,
             heardIsaiah6525: this.heardIsaiah6525,
@@ -1440,12 +1564,20 @@ export class WorldScene extends Scene {
             unlockedAchievements: previous?.unlockedAchievements ?? [],
             sawWellDone: this.sawWellDone,
             musicKey: music.key,
-            musicSeek: music.seek
+            musicSeek: music.seek,
+            triedMinigame: this.triedMinigame,
+            triedTreasure: this.triedTreasure,
+            heardQuestArrowTip: this.heardQuestArrowTip,
+            heardGemArrowTip: this.heardGemArrowTip
         }));
     }
 
     private restoreSave (save: GameSave): void {
         this.foundCount = save.foundCount;
+        this.triedMinigame = save.triedMinigame === true;
+        this.triedTreasure = save.triedTreasure === true;
+        this.heardQuestArrowTip = save.heardQuestArrowTip === true;
+        this.heardGemArrowTip = save.heardGemArrowTip === true;
         this.nextNames = [...save.nextNames];
         this.heardPsalm1 = save.heardPsalm1;
         this.heardPsalm1b = save.heardPsalm1b === true;
@@ -1460,6 +1592,7 @@ export class WorldScene extends Scene {
         this.heardPsalm6 = save.heardPsalm6 === true;
         this.heardJohn102 = save.heardJohn102 === true;
         this.heardJohn109 = save.heardJohn109 === true;
+        this.heardJohn1011 = save.heardJohn1011 === true;
         this.heardCorinthians = save.heardCorinthians === true;
         this.heardCity = save.heardCity === true;
         this.heardIsaiah6525 = save.heardIsaiah6525 === true;
@@ -1546,7 +1679,12 @@ export class WorldScene extends Scene {
         }
 
         if (this.heardPsalm4b && !this.heardCorinthians) {
-            this.ensureWolf();
+            if (this.heardJohn1011) {
+                this.ensureWolf();
+            }
+            else {
+                this.beginWolfLesson();
+            }
         }
 
         if (save.hasStaff || save.checkpoint === 'found-staff') {
@@ -1583,6 +1721,12 @@ export class WorldScene extends Scene {
         }
 
         syncAchievements(save);
+        this.refreshTreasureHud();
+        this.refreshAbcHud();
+
+        if (this.heardPsalm2 && !this.heardGemArrowTip) {
+            this.time.delayedCall(700, () => this.beginGemArrowTip());
+        }
     }
 
     private shouldHaveLostSheep (save: GameSave): boolean {
@@ -1632,6 +1776,10 @@ export class WorldScene extends Scene {
         this.pendingTreeVerseId = null;
         this.nextNames = FLOCK_NAMES.slice(1);
         this.foundCount = 0;
+        this.triedMinigame = false;
+        this.triedTreasure = false;
+        this.heardQuestArrowTip = false;
+        this.heardGemArrowTip = false;
         this.heardPsalm1 = false;
         this.heardPsalm1b = false;
         this.heardPsalm2 = false;
@@ -1645,6 +1793,7 @@ export class WorldScene extends Scene {
         this.heardPsalm6 = false;
         this.heardJohn102 = false;
         this.heardJohn109 = false;
+        this.heardJohn1011 = false;
         this.heardCorinthians = false;
         this.heardCity = false;
         this.heardIsaiah6525 = false;
@@ -1663,6 +1812,7 @@ export class WorldScene extends Scene {
         this.staffPickup = null;
         this.gems = [];
         this.foundGems = [];
+        this.pendingGemSpawnFrom = null;
         this.lastCheckpoint = null;
         this.strayReadyAt = 0;
         this.penSleepAt = 0;
@@ -1676,6 +1826,7 @@ export class WorldScene extends Scene {
         ensureSettingsGear(this);
         ensureSoundIcons(this);
         ensureAbcKeyboardIcon(this);
+        ensureAbcGlow(this);
         ensureTreasureChest(this);
 
         const settings = this.add.image(0, 0, SETTINGS_GEAR_KEY)
@@ -1713,11 +1864,49 @@ export class WorldScene extends Scene {
 
         makeHudInteractive(abc);
         abc.setData('ui', true);
-        abc.on('pointerover', () => abc.setTint(0xc4a882));
+        abc.on('pointerover', () => {
+            if (!this.triedMinigame) {
+                return;
+            }
+
+            abc.setTint(0xc4a882);
+        });
         abc.on('pointerout', () => abc.clearTint());
         abc.on('pointerdown', (_pointer: unknown, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
             event.stopPropagation();
             this.openMinigame();
+        });
+
+        const glow = this.add.image(0, 0, ABC_GLOW_KEY)
+            .setDisplaySize(ABC_KEYBOARD_SIZE * 2.2, ABC_KEYBOARD_SIZE * 2.2)
+            .setScrollFactor(0)
+            .setDepth(22)
+            .setBlendMode(BlendModes.ADD)
+            .setAlpha(0.4)
+            .setVisible(false);
+
+        this.abcBaseScale = abc.scaleX;
+        this.abcGlowBaseScale = glow.scaleX;
+        this.abcPulse = this.tweens.add({
+            targets: abc,
+            scaleX: this.abcBaseScale * 1.12,
+            scaleY: this.abcBaseScale * 1.12,
+            duration: 900,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+            paused: true
+        });
+        this.abcGlowPulse = this.tweens.add({
+            targets: glow,
+            alpha: { from: 0.28, to: 0.72 },
+            scaleX: { from: glow.scaleX * 0.92, to: glow.scaleX * 1.12 },
+            scaleY: { from: glow.scaleY * 0.92, to: glow.scaleY * 1.12 },
+            duration: 900,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+            paused: true
         });
 
         const chest = this.add.image(0, 0, TREASURE_CHEST_KEY)
@@ -1727,11 +1916,49 @@ export class WorldScene extends Scene {
 
         makeHudInteractive(chest);
         chest.setData('ui', true);
-        chest.on('pointerover', () => chest.setTint(0xc4a882));
+        chest.on('pointerover', () => {
+            if (!this.triedTreasure) {
+                return;
+            }
+
+            chest.setTint(0xc4a882);
+        });
         chest.on('pointerout', () => chest.clearTint());
         chest.on('pointerdown', (_pointer: unknown, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
             event.stopPropagation();
             this.openTreasure();
+        });
+
+        const chestGlow = this.add.image(0, 0, ABC_GLOW_KEY)
+            .setDisplaySize(TREASURE_CHEST_SIZE * 2.2, TREASURE_CHEST_SIZE * 2.2)
+            .setScrollFactor(0)
+            .setDepth(22)
+            .setBlendMode(BlendModes.ADD)
+            .setAlpha(0.4)
+            .setVisible(false);
+
+        this.chestBaseScale = chest.scaleX;
+        this.chestGlowBaseScale = chestGlow.scaleX;
+        this.chestPulse = this.tweens.add({
+            targets: chest,
+            scaleX: this.chestBaseScale * 1.12,
+            scaleY: this.chestBaseScale * 1.12,
+            duration: 900,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+            paused: true
+        });
+        this.chestGlowPulse = this.tweens.add({
+            targets: chestGlow,
+            alpha: { from: 0.28, to: 0.72 },
+            scaleX: { from: chestGlow.scaleX * 0.92, to: chestGlow.scaleX * 1.12 },
+            scaleY: { from: chestGlow.scaleY * 0.92, to: chestGlow.scaleY * 1.12 },
+            duration: 900,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+            paused: true
         });
 
         const cheat = this.add.text(0, 0, 'cheat', {
@@ -1753,8 +1980,82 @@ export class WorldScene extends Scene {
 
         this.hudSettings = settings;
         this.hudAbc = abc;
+        this.abcGlow = glow;
         this.hudChest = chest;
+        this.chestGlow = chestGlow;
         this.hudCheat = cheat;
+        this.refreshTreasureHud();
+        this.refreshAbcHud();
+        this.placeHudButtons();
+    }
+
+    private treasureHudUnlocked (): boolean {
+        return this.foundCount >= 1;
+    }
+
+    private abcHudUnlocked (): boolean {
+        return this.foundCount >= 2;
+    }
+
+    private refreshTreasureHud (): void {
+        if (!this.hudChest) {
+            return;
+        }
+
+        const unlocked = this.treasureHudUnlocked();
+        this.hudChest.setVisible(unlocked);
+
+        if (this.hudChest.input) {
+            this.hudChest.input.enabled = unlocked;
+        }
+
+        const attention = unlocked && !this.triedTreasure;
+        this.chestGlow?.setVisible(attention);
+
+        if (attention) {
+            this.chestPulse?.resume();
+            this.chestGlowPulse?.resume();
+        }
+        else {
+            this.chestPulse?.pause();
+            this.chestGlowPulse?.pause();
+            this.hudChest.setScale(this.chestBaseScale);
+            this.hudChest.clearTint();
+            this.chestGlow?.setScale(this.chestGlowBaseScale);
+            this.chestGlow?.setAlpha(0.4);
+        }
+
+        this.placeHudButtons();
+    }
+
+    private refreshAbcHud (): void {
+        if (!this.hudAbc) {
+            return;
+        }
+
+        const unlocked = this.abcHudUnlocked();
+        this.hudAbc.setVisible(unlocked);
+
+        if (this.hudAbc.input) {
+            this.hudAbc.input.enabled = unlocked;
+        }
+
+        const attention = unlocked && !this.triedMinigame;
+        this.abcGlow?.setVisible(attention);
+
+        if (attention) {
+            this.abcPulse?.resume();
+            this.abcGlowPulse?.resume();
+        }
+        else {
+            this.abcPulse?.pause();
+            this.abcGlowPulse?.pause();
+            this.hudAbc.setScale(this.abcBaseScale);
+            this.hudAbc.clearTint();
+            this.abcGlow?.setScale(this.abcGlowBaseScale);
+            this.abcGlow?.setAlpha(0.4);
+        }
+
         this.placeHudButtons();
     }
 
@@ -1776,18 +2077,24 @@ export class WorldScene extends Scene {
             this.hudSettings.x - this.hudSettings.displayWidth - 12,
             y
         );
-        this.hudAbc.setOrigin(1, originY).setPosition(
-            this.soundToggle.x - this.soundToggle.displayWidth - 12,
-            y
-        );
-        this.hudChest.setOrigin(1, originY).setPosition(
-            this.hudAbc.x - this.hudAbc.displayWidth - 12,
-            y
-        );
-        this.hudCheat.setOrigin(1, originY).setPosition(
-            this.hudChest.x - this.hudChest.displayWidth - 12,
-            cheatY
-        );
+
+        let nextX = this.soundToggle.x - this.soundToggle.displayWidth - 12;
+
+        if (this.hudAbc.visible) {
+            this.hudAbc.setOrigin(1, originY).setPosition(nextX, y);
+            const center = this.hudAbc.getCenter();
+            this.abcGlow?.setPosition(center.x, center.y);
+            nextX = this.hudAbc.x - this.hudAbc.displayWidth - 12;
+        }
+
+        if (this.hudChest.visible) {
+            this.hudChest.setOrigin(1, originY).setPosition(nextX, y);
+            const center = this.hudChest.getCenter();
+            this.chestGlow?.setPosition(center.x, center.y);
+            nextX = this.hudChest.x - this.hudChest.displayWidth - 12;
+        }
+
+        this.hudCheat.setOrigin(1, originY).setPosition(nextX, cheatY);
     }
 
     private layoutChrome (): void {
@@ -2315,6 +2622,19 @@ export class WorldScene extends Scene {
             return;
         }
 
+        const save = loadSave();
+
+        if (save?.triedMinigame) {
+            this.triedMinigame = true;
+        }
+
+        if (save?.triedTreasure) {
+            this.triedTreasure = true;
+        }
+
+        this.refreshTreasureHud();
+        this.refreshAbcHud();
+
         this.recoverInterruptedStory();
         this.releaseWorldAudio();
     }
@@ -2383,6 +2703,20 @@ export class WorldScene extends Scene {
             return;
         }
 
+        if (!this.treasureHudUnlocked()) {
+            return;
+        }
+
+        this.triedTreasure = true;
+        this.refreshTreasureHud();
+
+        if (this.lastCheckpoint) {
+            this.saveProgress(this.lastCheckpoint);
+        }
+        else {
+            markTreasureTried();
+        }
+
         pauseSpeech();
         this.scene.pause();
         this.scene.launch('TreasureScene', {
@@ -2404,6 +2738,7 @@ export class WorldScene extends Scene {
                 heardPsalm6: this.heardPsalm6,
                 heardJohn102: this.heardJohn102,
                 heardJohn109: this.heardJohn109,
+                heardJohn1011: this.heardJohn1011,
                 heardCorinthians: this.heardCorinthians,
                 heardCity: this.heardCity,
                 heardIsaiah6525: this.heardIsaiah6525,
@@ -2417,6 +2752,20 @@ export class WorldScene extends Scene {
     private openMinigame (): void {
         if (this.overlayOpen()) {
             return;
+        }
+
+        if (!this.abcHudUnlocked()) {
+            return;
+        }
+
+        this.triedMinigame = true;
+        this.refreshAbcHud();
+
+        if (this.lastCheckpoint) {
+            this.saveProgress(this.lastCheckpoint);
+        }
+        else {
+            markMinigameTried();
         }
 
         pauseSpeech();
@@ -2495,10 +2844,154 @@ export class WorldScene extends Scene {
 
                 this.playLines([psalm23Half(4, 'b')], () => {
                     stopHowling();
-                    this.ensureWolf();
+                    this.beginWolfLesson();
                 });
             });
         });
+    }
+
+    /**
+     * First night wolf: pause, speak John 10:11, show scare-away, then point to the pen arrow.
+     */
+    private beginWolfLesson (): void {
+        if (this.heardCorinthians) {
+            return;
+        }
+
+        if (this.heardJohn1011) {
+            this.ensureWolf();
+            return;
+        }
+
+        this.scriptPlaying = true;
+        this.spawnLessonWolf();
+
+        this.time.delayedCall(WOLF_LESSON_PAUSE_MS, () => {
+            if (!this.sys.isActive() || this.heardJohn1011 || this.heardCorinthians) {
+                this.scriptPlaying = false;
+                return;
+            }
+
+            this.playLines([
+                john10Line(11),
+                'Walk toward the wolf to scare it away from the flock.'
+            ], () => {
+                if (!this.sys.isActive()) {
+                    return;
+                }
+
+                this.scriptPlaying = true;
+                this.demoWolfScare(() => {
+                    if (!this.sys.isActive()) {
+                        return;
+                    }
+
+                    this.heardJohn1011 = true;
+                    this.saveProgress(this.lastCheckpoint ?? 'psalm-23-4b');
+                    this.playLines([
+                        'Keep following the white arrow.'
+                    ], () => {
+                        this.finishWolfLesson();
+                    });
+                });
+            });
+        });
+    }
+
+    private flockFocusPoint (): { x: number; y: number } {
+        const followers = this.flock.filter((sheep) => sheep.mood === 'following' && !sheep.hurt);
+
+        if (followers.length === 0) {
+            return { x: this.shepherd.sprite.x, y: this.shepherd.sprite.y };
+        }
+
+        let x = 0;
+        let y = 0;
+
+        for (const sheep of followers) {
+            x += sheep.sprite.x;
+            y += sheep.sprite.y;
+        }
+
+        return { x: x / followers.length, y: y / followers.length };
+    }
+
+    /** Place a calm wolf that stalks toward the flock for the tutorial. */
+    private spawnLessonWolf (): void {
+        if (this.wolf || this.heardCorinthians) {
+            return;
+        }
+
+        const focus = this.flockFocusPoint();
+        const sx = this.shepherd.sprite.x;
+        const sy = this.shepherd.sprite.y;
+        let dx = focus.x - sx;
+        let dy = focus.y - sy;
+
+        if (Math.hypot(dx, dy) < 40) {
+            dx = 1;
+            dy = 0.15;
+        }
+
+        const len = Math.hypot(dx, dy) || 1;
+        const nx = dx / len;
+        const ny = dy / len;
+        // Approach from the far side of the flock so the shepherd walks through toward it.
+        const farX = focus.x + nx * 340;
+        const farY = focus.y + ny * 340;
+        const nearX = focus.x + nx * 170;
+        const nearY = focus.y + ny * 170;
+
+        this.wolf = new Wolf(this, sx, sy);
+        this.wolf.placeAt(farX, farY);
+        this.wolf.setOrigin(farX, farY);
+        this.wolf.setAggressive(false);
+        this.wolf.walkTo(nearX, nearY, WOLF_LESSON_APPROACH_SPEED);
+    }
+
+    /** Guide the shepherd toward the wolf so it flees — shows the scare-away mechanic. */
+    private demoWolfScare (onDone: () => void): void {
+        const wolf = this.wolf;
+
+        if (!wolf || !wolf.sprite.active) {
+            onDone();
+            return;
+        }
+
+        const sx = this.shepherd.sprite.x;
+        const sy = this.shepherd.sprite.y;
+        const wx = wolf.sprite.x;
+        const wy = wolf.sprite.y;
+        const dx = wx - sx;
+        const dy = wy - sy;
+        const dist = Math.hypot(dx, dy) || 1;
+        const stop = Math.max(110, dist * 0.42);
+        const tx = wx - (dx / dist) * stop;
+        const ty = wy - (dy / dist) * stop;
+
+        this.shepherd.guideTo(tx, ty, () => {
+            this.time.delayedCall(850, () => {
+                if (!this.sys.isActive()) {
+                    return;
+                }
+
+                this.shepherd.clearGuidance();
+                onDone();
+            });
+        }, WOLF_LESSON_GUIDE_SPEED);
+    }
+
+    private finishWolfLesson (): void {
+        this.shepherd.clearGuidance();
+
+        if (this.wolf && this.wolf.sprite.active) {
+            this.wolf.setAggressive(true);
+        }
+        else {
+            this.ensureWolf();
+        }
+
+        this.showCue('Guide the flock to the pen.');
     }
 
     private ensurePen (at?: { x: number; y: number } | null): Sheepfold {
@@ -2509,11 +3002,11 @@ export class WorldScene extends Scene {
         // Always left side; ignore legacy saves that parked the fold on the right.
         const spot = at && penSpotOnLeft(at) ? at : defaultPenSpot();
         this.sheepfold = new Sheepfold(this, spot.x, spot.y);
-        this.ensureCity();
         return this.sheepfold;
     }
 
-    private ensureCity (_pen?: { x: number; y: number } | null): Jerusalem {
+    /** New Jerusalem appears only after the change (1 Cor 15:51). */
+    private ensureCity (): Jerusalem {
         if (this.city) {
             return this.city;
         }
@@ -2676,12 +3169,6 @@ export class WorldScene extends Scene {
         this.saveProgress('found-staff');
 
         const lines = [psalm23Comfort()];
-
-        if (this.scriptPlaying) {
-            this.gemVerseQueue.push(...lines);
-            return;
-        }
-
         this.playLines(lines);
     }
 
@@ -2703,16 +3190,11 @@ export class WorldScene extends Scene {
         this.gems = this.gems.filter((item) => item !== gem);
         gem.destroy();
 
-        const next = spawnBibleGemAway(
-            this,
-            this.foundGems,
-            this.gems,
-            { x: this.shepherd.sprite.x, y: this.shepherd.sprite.y }
-        );
-
-        if (next) {
-            this.gems.push(next);
-        }
+        // Delay the replacement until the shepherd has walked away (and place it off-screen).
+        this.pendingGemSpawnFrom = {
+            x: this.shepherd.sprite.x,
+            y: this.shepherd.sprite.y
+        };
 
         // Persist foundGems + shepherd position (and music seek) at the pickup spot.
         // Prefer the story checkpoint; early pickups before any scripture use found-gem.
@@ -2728,6 +3210,34 @@ export class WorldScene extends Scene {
         }
 
         this.playLines(lines);
+    }
+
+    private maybeSpawnPendingGem (): void {
+        if (!this.pendingGemSpawnFrom) {
+            return;
+        }
+
+        const walked = Math.hypot(
+            this.shepherd.sprite.x - this.pendingGemSpawnFrom.x,
+            this.shepherd.sprite.y - this.pendingGemSpawnFrom.y
+        );
+
+        if (walked < GEM_RESPAWN_WALK) {
+            return;
+        }
+
+        const next = spawnBibleGemAway(
+            this,
+            this.foundGems,
+            this.gems,
+            { x: this.shepherd.sprite.x, y: this.shepherd.sprite.y }
+        );
+
+        this.pendingGemSpawnFrom = null;
+
+        if (next) {
+            this.gems.push(next);
+        }
     }
 
     private maybeReachPen (): void {
@@ -3535,6 +4045,7 @@ export class WorldScene extends Scene {
 
     /** After 1 Corinthians 15:51: hunter gone, roses on the thorns, wolf then lion wait to be found. */
     private applyPeaceableKingdom (): void {
+        this.ensureCity();
         this.destroyAllWolves();
         this.bloomThorns();
         this.ensurePeaceableHunt();

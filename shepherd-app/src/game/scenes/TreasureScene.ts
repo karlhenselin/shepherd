@@ -54,6 +54,7 @@ export class TreasureScene extends Scene {
             heardPsalm6: save?.heardPsalm6,
             heardJohn102: save?.heardJohn102,
             heardJohn109: save?.heardJohn109,
+            heardJohn1011: save?.heardJohn1011,
             heardCorinthians: save?.heardCorinthians,
             heardCity: save?.heardCity,
             heardIsaiah6525: save?.heardIsaiah6525,
@@ -71,7 +72,6 @@ export class TreasureScene extends Scene {
             title: 'Bible Treasures',
             titleSize: '40px',
             headerH: 88,
-            footerH: 100,
             onBack: () => this.close()
         });
 

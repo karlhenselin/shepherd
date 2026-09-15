@@ -141,6 +141,7 @@ export function allSpokenLines (): string[] {
     lines.add(scriptureLine(REVELATION_21_2));
     lines.add(john10Line(2));
     lines.add(john10Line(9));
+    lines.add(john10Line(11));
     lines.add(john14Line());
     lines.add(corinthians15Line());
     lines.add(scriptureLine(PSALM_23[5].table));
@@ -148,9 +149,15 @@ export function allSpokenLines (): string[] {
     lines.add(scriptureLine(PSALM_23[6].b));
     lines.add(scriptureLine(JOHN_10[2]));
     lines.add(scriptureLine(JOHN_10[9]));
+    lines.add(scriptureLine(JOHN_10[11]));
     lines.add(scriptureLine(JOHN_14_6));
     lines.add(scriptureLine(CORINTHIANS_15_51));
     lines.add(scriptureLine(ISAIAH_53_6));
+    lines.add('Walk toward the wolf to scare it away from the flock.');
+    lines.add('Keep following the white arrow.');
+    lines.add('The white arrow leads you to your main quest.');
+    lines.add('The blue arrow points to the nearest Bible verse.');
+    lines.add('Collect them all.');
 
     for (const gem of BIBLE_GEMS) {
         lines.add(bibleGemLine(gem.id));

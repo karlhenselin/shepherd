@@ -12,6 +12,7 @@ import { chromePad } from '../ui/chromeInsets';
 import { UMBER } from '../ui/paperScroll';
 import { scriptureLine } from '../data/scripture';
 import { speakCue, stopSpeech } from '../ui/speech';
+import { markMinigameTried } from '../save/gameSave';
 
 const PAPER = 0xf3ead8;
 const MUTED = '#6b5344';
@@ -60,6 +61,7 @@ export class MinigameScene extends Scene {
         this.wpmPausedAt = 0;
 
         this.sound.mute = !isSoundOn();
+        markMinigameTried();
         // Same BGM as the world (resume mid-track if it was stopped for Treasures).
         // Defer one tick so status is RUNNING even if a caller checks isActive().
         this.time.delayedCall(0, () => {
@@ -101,24 +103,25 @@ export class MinigameScene extends Scene {
             align: 'center'
         }).setOrigin(0.5).setDepth(5);
 
-        this.statsText = this.add.text(width - pad.right, pad.top + 8, '— WPM    —%', {
+        this.statsText = this.add.text(width - pad.right - 52, pad.top + 8, '— WPM    —%', {
             fontFamily: 'Georgia, Palatino, serif',
             fontSize: '16px',
             color: MUTED,
             align: 'right'
         }).setOrigin(1, 0).setDepth(40);
 
-        const back = this.add.text(pad.left + 8, pad.top + 8, 'Back', {
+        const close = this.add.text(width - pad.right, pad.top + 4, '×', {
             fontFamily: 'Georgia, Palatino, serif',
-            fontSize: '20px',
+            fontSize: '32px',
             color: UMBER,
             backgroundColor: '#e8dcc8',
-            padding: { x: 14, y: 8 }
-        }).setOrigin(0, 0).setDepth(40).setInteractive({ useHandCursor: true });
+            padding: { x: 12, y: 2 },
+            align: 'center'
+        }).setOrigin(1, 0).setDepth(40).setInteractive({ useHandCursor: true });
 
-        back.on('pointerover', () => back.setColor('#5c4634'));
-        back.on('pointerout', () => back.setColor(UMBER));
-        back.on('pointerdown', (
+        close.on('pointerover', () => close.setColor('#5c4634'));
+        close.on('pointerout', () => close.setColor(UMBER));
+        close.on('pointerdown', (
             _p: unknown,
             _x: number,
             _y: number,

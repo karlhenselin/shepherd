@@ -19,7 +19,6 @@ export class CheatScene extends Scene {
             title: 'Cheat',
             subtitle: 'Jump to a save point. Temporary.',
             headerH: 96,
-            footerH: 100,
             onBack: () => this.close()
         });
 

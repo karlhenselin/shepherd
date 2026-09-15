@@ -37,7 +37,7 @@ export type PaperScroll = {
 
 export function createPaperScroll (scene: Scene, opts: PaperScrollOptions): PaperScroll {
     const headerH = opts.headerH ?? 64;
-    const footerH = opts.footerH ?? 88;
+    const footerH = opts.footerH ?? 24;
     const titleSize = opts.titleSize ?? '36px';
     const pad = chromePad();
     const { width, height } = scene.scale;
@@ -82,18 +82,26 @@ export function createPaperScroll (scene: Scene, opts: PaperScrollOptions): Pape
         }).setOrigin(0.5).setDepth(11);
     }
 
-    const back = scene.add.text(cx, height - pad.bottom - footerH / 2, 'Back', {
+    const close = scene.add.text(width - pad.right, pad.top + 6, '×', {
         fontFamily: 'Georgia, Palatino, serif',
-        fontSize: '22px',
+        fontSize: '32px',
         color: UMBER,
         backgroundColor: '#f3ead8',
-        padding: { x: 22, y: 10 },
+        padding: { x: 12, y: 2 },
         align: 'center'
-    }).setOrigin(0.5).setDepth(11).setInteractive({ useHandCursor: true });
+    }).setOrigin(1, 0).setDepth(12).setInteractive({ useHandCursor: true });
 
-    back.on('pointerover', () => back.setColor('#5c4634'));
-    back.on('pointerout', () => back.setColor(UMBER));
-    back.on('pointerdown', () => opts.onBack());
+    close.on('pointerover', () => close.setColor('#5c4634'));
+    close.on('pointerout', () => close.setColor(UMBER));
+    close.on('pointerdown', (
+        _pointer: unknown,
+        _x: number,
+        _y: number,
+        event: Phaser.Types.Input.EventData
+    ) => {
+        event.stopPropagation();
+        opts.onBack();
+    });
 
     let scrollMin = 0;
     let contentHeight = 0;

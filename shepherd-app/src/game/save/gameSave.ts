@@ -24,6 +24,8 @@ export type GameSave = {
     heardPsalm6?: boolean;
     heardJohn102?: boolean;
     heardJohn109?: boolean;
+    /** Night wolf lesson: John 10:11 + scare-away tutorial. */
+    heardJohn1011?: boolean;
     heardCorinthians?: boolean;
     heardCity?: boolean;
     /** Spoken once when Leo first eats grass after the change. */
@@ -51,6 +53,14 @@ export type GameSave = {
     musicKey?: string;
     /** Playback position in seconds. Day progress saves keep this; night / dawn resets to 0. Optional for older saves; missing/invalid → start at 0. */
     musicSeek?: number;
+    /** Player has opened the Scripture Typing minigame at least once. */
+    triedMinigame?: boolean;
+    /** Player has opened Bible Treasures at least once. */
+    triedTreasure?: boolean;
+    /** Heard the white (main quest) arrow tip. */
+    heardQuestArrowTip?: boolean;
+    /** Heard the blue (Bible verse) arrow tip. */
+    heardGemArrowTip?: boolean;
 };
 
 export function loadSave (): GameSave | null {
@@ -76,6 +86,28 @@ export function loadSave (): GameSave | null {
 
 export function writeSave (save: GameSave): void {
     localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+}
+
+/** Persist that the typing minigame has been opened (stops HUD attention pulse). */
+export function markMinigameTried (): void {
+    const save = loadSave();
+
+    if (!save || save.triedMinigame) {
+        return;
+    }
+
+    writeSave({ ...save, triedMinigame: true });
+}
+
+/** Persist that Bible Treasures has been opened (stops HUD attention pulse). */
+export function markTreasureTried (): void {
+    const save = loadSave();
+
+    if (!save || save.triedTreasure) {
+        return;
+    }
+
+    writeSave({ ...save, triedTreasure: true });
 }
 
 export function clearSave (): void {

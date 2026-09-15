@@ -1,6 +1,7 @@
 import { Scene } from 'phaser';
 
 export const ABC_KEYBOARD_KEY = 'abc-keyboard';
+export const ABC_GLOW_KEY = 'abc-keyboard-glow';
 export const ABC_KEYBOARD_SIZE = 40;
 export const ABC_KEYBOARD_LIST_SIZE = 28;
 
@@ -21,6 +22,32 @@ export function ensureAbcKeyboardIcon (scene: Scene): void {
 
     paintAbcChip(ctx, size);
     scene.textures.addCanvas(ABC_KEYBOARD_KEY, canvas);
+}
+
+/** Soft warm disc for HUD attention glow (use with ADD blend). */
+export function ensureAbcGlow (scene: Scene): void {
+    if (scene.textures.exists(ABC_GLOW_KEY)) {
+        return;
+    }
+
+    const size = 96;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) {
+        throw new Error('Could not create ABC glow');
+    }
+
+    const c = size / 2;
+    const grad = ctx.createRadialGradient(c, c, 4, c, c, c);
+    grad.addColorStop(0, 'rgba(255, 220, 140, 0.95)');
+    grad.addColorStop(0.45, 'rgba(255, 190, 100, 0.45)');
+    grad.addColorStop(1, 'rgba(255, 170, 80, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+    scene.textures.addCanvas(ABC_GLOW_KEY, canvas);
 }
 
 function paintAbcChip (ctx: CanvasRenderingContext2D, size: number): void {
