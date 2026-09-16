@@ -49,6 +49,21 @@ export function loadSheepSounds (load: Phaser.Loader.LoaderPlugin): void {
     }
 }
 
+/** Soft bleat for minigame wrong-tap feedback (no spatial falloff). */
+export function playQuietBleat (scene: Scene, volume = 0.32): void {
+    if (!isSoundOn() || !canPlayBleats(scene)) {
+        return;
+    }
+
+    const key = pickLoaded(scene, QUIET_KEYS);
+
+    if (!key) {
+        return;
+    }
+
+    scene.sound.play(key, { volume });
+}
+
 export function tickSheepSounds (scene: Scene, flock: FlockBehavior[], listener: { x: number; y: number }, night = false): void {
     const now = scene.time.now;
 

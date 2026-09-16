@@ -11,6 +11,11 @@ import {
     ABC_KEYBOARD_LIST_SIZE,
     ensureAbcKeyboardIcon
 } from '../ui/abcKeyboardIcon';
+import {
+    SHEEP_VERSE_KEY,
+    SHEEP_VERSE_LIST_SIZE,
+    ensureSheepVerseIcon
+} from '../ui/sheepVerseIcon';
 import { speakCue, stopSpeech } from '../ui/speech';
 
 const UMBER = '#3d2c1e';
@@ -35,6 +40,7 @@ export class TreasureScene extends Scene {
         heard?: Parameters<typeof unlockedStoryPassages>[0];
     }): void {
         ensureAbcKeyboardIcon(this);
+        ensureSheepVerseIcon(this);
 
         const save = loadSave();
         const foundIds = data?.foundGems ?? save?.foundGems ?? [];
@@ -142,6 +148,16 @@ export class TreasureScene extends Scene {
             this.scroll.root.add(abc);
             this.makeAbcButton(abc, passage);
 
+            const sheep = this.add.image(
+                abc.x + ABC_KEYBOARD_LIST_SIZE + 8,
+                y + ref.height / 2,
+                SHEEP_VERSE_KEY
+            )
+                .setDisplaySize(SHEEP_VERSE_LIST_SIZE, SHEEP_VERSE_LIST_SIZE)
+                .setOrigin(0, 0.5);
+            this.scroll.root.add(sheep);
+            this.makeSheepVerseButton(sheep, passage);
+
             y += 26;
 
             const body = this.add.text(0, y, passage.text, {
@@ -175,10 +191,33 @@ export class TreasureScene extends Scene {
         });
     }
 
+    private makeSheepVerseButton (sheep: GameObjects.Image, passage: { ref: string; text: string }): void {
+        sheep.setInteractive({ useHandCursor: true });
+        sheep.on('pointerover', () => sheep.setTint(0xc4a882));
+        sheep.on('pointerout', () => sheep.clearTint());
+        sheep.on('pointerup', (pointer: { y: number }) => {
+            if (this.scroll.dragDistance > DRAG_CLICK_SLOP || !this.scroll.inBand(pointer.y)) {
+                return;
+            }
+
+            this.openSheepMinigame(passage);
+        });
+    }
+
     private openMinigame (passage: { ref: string; text: string }): void {
         stopSpeech();
         const queue = buildTreasurePracticeQueue(passage, this.unlockedPassages);
         this.scene.launch('MinigameScene', {
+            queue,
+            returnTo: 'TreasureScene'
+        });
+        this.scene.stop();
+    }
+
+    private openSheepMinigame (passage: { ref: string; text: string }): void {
+        stopSpeech();
+        const queue = buildTreasurePracticeQueue(passage, this.unlockedPassages);
+        this.scene.launch('SheepVerseScene', {
             queue,
             returnTo: 'TreasureScene'
         });

@@ -37,6 +37,8 @@ export type GameSave = {
     pen?: SavedPoint | null;
     water?: SavedPoint[];
     grass?: SavedPoint[];
+    /** Pre-planned find spots for the four sheep (name → world point). */
+    sheepSpawns?: Record<string, SavedPoint>;
     foundGems?: string[];
     foundWaterVerses?: string[];
     foundTreeVerses?: string[];
@@ -55,6 +57,8 @@ export type GameSave = {
     musicSeek?: number;
     /** Player has opened the Scripture Typing minigame at least once. */
     triedMinigame?: boolean;
+    /** Player has opened the sheep-click verse minigame at least once. */
+    triedSheepMinigame?: boolean;
     /** Player has opened Bible Treasures at least once. */
     triedTreasure?: boolean;
     /** Heard the white (main quest) arrow tip. */
@@ -97,6 +101,17 @@ export function markMinigameTried (): void {
     }
 
     writeSave({ ...save, triedMinigame: true });
+}
+
+/** Persist that the sheep-click minigame has been opened (stops HUD attention pulse). */
+export function markSheepMinigameTried (): void {
+    const save = loadSave();
+
+    if (!save || save.triedSheepMinigame) {
+        return;
+    }
+
+    writeSave({ ...save, triedSheepMinigame: true });
 }
 
 /** Persist that Bible Treasures has been opened (stops HUD attention pulse). */

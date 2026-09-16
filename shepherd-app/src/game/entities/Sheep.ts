@@ -69,7 +69,8 @@ export class Sheep extends FlockBehavior {
     }
 }
 
-function ensureSheepTexture (scene: Scene): void {
+/** Ensure the procedural sheep body texture exists (minigames / HUD art). */
+export function ensureSheepTexture (scene: Scene): void {
     if (scene.textures.exists('sheep')) {
         return;
     }

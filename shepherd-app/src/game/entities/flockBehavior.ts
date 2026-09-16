@@ -6,6 +6,8 @@ import { characterDepth } from '../world/constants';
 export const FOLLOW_SPEED = 150 * 0.95 * 0.95;
 /** After 1 Corinthians 15:51, the sheep keep up a little better. */
 const CHANGED_FOLLOW_SCALE = 1.18;
+/** After night, shrink the flock so a bigger party is easier to walk through. */
+const POST_NIGHT_SIZE_SCALE = 0.9;
 const NOTICE_DISTANCE = 110;
 export const FOLLOW_DISTANCE = 70;
 const NIGHT_FOLLOW_DISTANCE = 41;
@@ -83,6 +85,9 @@ export class FlockBehavior {
     snack = false;
     /** After the change: follow a little faster so the flock keeps up. */
     changed = false;
+    /** Display / pet-range scale (drops after night). */
+    private sizeScale = 1;
+    private readonly baseBodyRadius: number;
     hurt = false;
     /** Stuck in a bramble (uses hurt/bandage flow, not the hole). */
     snaredInThorns = false;
@@ -161,15 +166,52 @@ export class FlockBehavior {
 
         this.body = this.sprite.body as Physics.Arcade.Body;
         this.body.setCollideWorldBounds(true);
-        const bodyRadius = appearance.bodyRadius
+        this.baseBodyRadius = appearance.bodyRadius
             ?? Math.round(14 * this.sprite.width / BODY_RADIUS_REF);
-        this.body.setCircle(bodyRadius);
+        this.body.setCircle(this.baseBodyRadius);
         this.body.setVelocity(0, 0);
         this.body.setImmovable(true);
 
         if (this.peaceable && appearance.restTextureKey) {
             this.applyRestPose();
         }
+    }
+
+    /** Mark post-Corinthians flock state and shrink sprites for the larger party. */
+    setChanged (changed: boolean): void {
+        this.changed = changed;
+
+        if (changed) {
+            this.applyPostNightSize();
+        }
+    }
+
+    /** After night: 10% smaller art, body, and walk-into pet radius. */
+    applyPostNightSize (): void {
+        if (this.sizeScale <= POST_NIGHT_SIZE_SCALE) {
+            return;
+        }
+
+        this.sizeScale = POST_NIGHT_SIZE_SCALE;
+        const resting = Boolean(
+            this.peaceable
+            && this.appearance.restTextureKey
+            && this.sprite.texture.key === this.appearance.restTextureKey
+        );
+        const height = resting
+            ? (this.appearance.restDisplayHeight ?? this.appearance.displayHeight)
+            : this.appearance.displayHeight;
+        this.fitSpriteHeight(height);
+        this.body.setCircle(Math.max(1, Math.round(this.baseBodyRadius * this.sizeScale)));
+
+        if (this.appearance.shadowDisplaySize) {
+            this.shadow.setDisplaySize(
+                this.appearance.shadowDisplaySize.width * this.sizeScale,
+                this.appearance.shadowDisplaySize.height * this.sizeScale
+            );
+        }
+
+        this.placeShadow();
     }
 
     get isBusy (): boolean {
@@ -192,9 +234,18 @@ export class FlockBehavior {
         return this.rescueWait !== null;
     }
 
-    /** Following sheep that aren't hurt / penned / mid-meal. */
+    /** Following sheep that aren't hurt / penned / mid-meal / mid-drink. */
     canBePetted (): boolean {
-        if (this.mood !== 'following' || this.hurt || this.isBusy || this.isDancing || this.isScooting || this.isRescueWaiting || this.isApproachingForPet) {
+        if (
+            this.mood !== 'following'
+            || this.hurt
+            || this.thirsty
+            || this.isBusy
+            || this.isDancing
+            || this.isScooting
+            || this.isRescueWaiting
+            || this.isApproachingForPet
+        ) {
             return false;
         }
 
@@ -202,7 +253,7 @@ export class FlockBehavior {
     }
 
     isCloseEnoughToPet (x: number, y: number): boolean {
-        return Math.hypot(x - this.sprite.x, y - this.sprite.y) < PET_DISTANCE;
+        return Math.hypot(x - this.sprite.x, y - this.sprite.y) < PET_DISTANCE * this.sizeScale;
     }
 
     beginHappyDance (durationMs = PET_DANCE_MS): void {
@@ -859,14 +910,16 @@ export class FlockBehavior {
     }
 
     private fitSpriteHeight (height: number): void {
+        const scaled = height * this.sizeScale;
+
         if (this.appearance.fitAspect) {
             const src = this.sprite.texture.getSourceImage() as { width: number; height: number };
-            const width = height * (src.width / Math.max(src.height, 1));
-            this.sprite.setDisplaySize(width, height);
+            const width = scaled * (src.width / Math.max(src.height, 1));
+            this.sprite.setDisplaySize(width, scaled);
             return;
         }
 
-        this.sprite.setDisplaySize(height, height);
+        this.sprite.setDisplaySize(scaled, scaled);
     }
 
     private placeShadow (): void {

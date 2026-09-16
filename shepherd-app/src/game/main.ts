@@ -7,6 +7,7 @@ import { SettingsScene } from './scenes/SettingsScene';
 import { TreasureScene } from './scenes/TreasureScene';
 import { AchievementsScene } from './scenes/AchievementsScene';
 import { MinigameScene } from './scenes/MinigameScene';
+import { SheepVerseScene } from './scenes/SheepVerseScene';
 import { WorldScene } from './scenes/WorldScene';
 import { installAudioFocus } from './audio/audioFocus';
 
@@ -37,7 +38,8 @@ const config: Phaser.Types.Core.GameConfig = {
         TreasureScene,
         AchievementsScene,
         CheatScene,
-        MinigameScene
+        MinigameScene,
+        SheepVerseScene
     ]
 };
 

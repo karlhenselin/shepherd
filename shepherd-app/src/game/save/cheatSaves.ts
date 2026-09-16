@@ -1,7 +1,7 @@
 import { BIBLE_GEMS } from '../data/scripture';
 import { TREE_VERSES } from '../data/treeVerses';
 import { WATER_VERSES } from '../data/waterVerses';
-import { defaultCitySpot, defaultPenSpot, PASTURE_COL, PASTURE_ROW, regionCenter, startCenter, WATER_COL, WATER_ROW } from '../world/constants';
+import { defaultCitySpot, defaultPenSpot, PASTURE_COL, PASTURE_ROW, planSheepSpawns, regionCenter, startCenter, WATER_COL, WATER_ROW } from '../world/constants';
 import { CITY_APPROACH_Y } from '../world/Jerusalem';
 import { GameSave, StoryCheckpoint } from './gameSave';
 
@@ -41,6 +41,7 @@ export const CHEAT_SPOTS: CheatSpot[] = [
 
 function blank (checkpoint: StoryCheckpoint, extra: Partial<GameSave> = {}): GameSave {
     const start = startCenter();
+    const pen = defaultPenSpot();
 
     return {
         version: 1,
@@ -66,6 +67,7 @@ function blank (checkpoint: StoryCheckpoint, extra: Partial<GameSave> = {}): Gam
         player: start,
         pen: null,
         foundGems: [],
+        sheepSpawns: planSheepSpawns([...FLOCK], [start, pen]),
         ...extra
     };
 }
