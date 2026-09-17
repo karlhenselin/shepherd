@@ -49,11 +49,20 @@ import { SOUND_ICON_SIZE, ensureSoundIcons, soundIconKey } from '../ui/soundIcon
 import { TREASURE_CHEST_KEY, TREASURE_CHEST_SIZE, ensureTreasureChest } from '../ui/treasureChest';
 import { ABC_GLOW_KEY, ABC_KEYBOARD_KEY, ABC_KEYBOARD_SIZE, ensureAbcGlow, ensureAbcKeyboardIcon } from '../ui/abcKeyboardIcon';
 import { SHEEP_VERSE_KEY, SHEEP_VERSE_SIZE, ensureSheepVerseIcon } from '../ui/sheepVerseIcon';
+import { showTypingMinigame } from '../ui/platform';
 import { applyAchievements, syncAchievements } from '../achievements/achievements';
 import { GameSave, SavedPoint, StoryCheckpoint, loadSave, writeSave, clearSave, markMinigameTried, markSheepMinigameTried, markTreasureTried } from '../save/gameSave';
-
-const FLOCK_NAMES = ['Clover', 'Snowball', 'Milo', 'Biscuit'];
-const PEACEABLE_JOINERS = ['Leo', 'Sarah'] as const;
+import {
+    FLOCK_NAMES,
+    PEACEABLE_JOINERS,
+    abcHudUnlocked,
+    canSpawnFlockName,
+    isFlockName,
+    shouldAwaitHoleSheep,
+    shouldHaveLostSheep,
+    shouldTrapInHole,
+    treasureHudUnlocked
+} from '../save/progression';
 const SHEPHERD_SPEED = 180;
 const STRAY_AHEAD_DISTANCE = FOLLOW_DISTANCE + (SHEPHERD_SPEED - FOLLOW_SPEED) * 7;
 /** Once lagging sheep crosses this fraction of stray distance, fire one warning baah. */
@@ -308,7 +317,7 @@ export class WorldScene extends Scene {
     private lostHint!: LostSheepHint;
     private gemHint!: BibleGemHint;
     private lastGoldStone: { x: number; y: number } | null = null;
-    private nextNames = FLOCK_NAMES.slice(1);
+    private nextNames: string[] = [...FLOCK_NAMES.slice(1)];
     /** Pre-planned find spots for Clover → Biscuit (persisted in the save). */
     private sheepSpawns: Record<string, SavedPoint> = {};
     private foundCount = 0;
@@ -1424,7 +1433,7 @@ export class WorldScene extends Scene {
     /** Undiscovered story sheep still out as a find target (not Leo/Sarah). */
     private hasActiveFlockFind (): boolean {
         return this.flock.some((sheep) =>
-            FLOCK_NAMES.includes(sheep.name)
+            isFlockName(sheep.name)
             && !sheep.discovered
             && (sheep.mood === 'waiting' || sheep.mood === 'hurt')
         );
@@ -1596,6 +1605,7 @@ export class WorldScene extends Scene {
             snaredName,
             unlockedAchievements: previous?.unlockedAchievements ?? [],
             sawWellDone: this.sawWellDone,
+            achievementsDisabled: previous?.achievementsDisabled === true,
             musicKey: music.key,
             musicSeek: music.seek,
             triedMinigame: this.triedMinigame,
@@ -1688,10 +1698,10 @@ export class WorldScene extends Scene {
                 trapped.markDiscovered();
             }
         }
-        else if (this.shouldHaveLostSheep(save)) {
+        else if (shouldHaveLostSheep(save)) {
             this.spawnNextSheep();
         }
-        else if (this.shouldAwaitHoleSheep(save)) {
+        else if (shouldAwaitHoleSheep(save)) {
             this.spawnNextSheep();
             this.showCue('A sheep is missing.');
         }
@@ -1766,19 +1776,6 @@ export class WorldScene extends Scene {
         }
     }
 
-    private shouldHaveLostSheep (save: GameSave): boolean {
-        return (save.heardPsalm2 && save.foundCount < 2)
-            || (this.heardPsalm2b && save.foundCount < 3 && save.nextNames.length > 0);
-    }
-
-    private shouldAwaitHoleSheep (save: GameSave): boolean {
-        return this.heardPsalm2b
-            && !this.heardPsalm3
-            && save.foundCount >= 3
-            && save.nextNames.includes('Biscuit')
-            && !save.waitingName;
-    }
-
     private resetRun (): void {
         this.flock = [];
         this.grass = [];
@@ -1811,7 +1808,7 @@ export class WorldScene extends Scene {
         this.gemVerseQueue = [];
         this.scriptQueue = [];
         this.pendingTreeVerseId = null;
-        this.nextNames = FLOCK_NAMES.slice(1);
+        this.nextNames = [...FLOCK_NAMES.slice(1)];
         this.sheepSpawns = {};
         this.foundCount = 0;
         this.triedMinigame = false;
@@ -2084,20 +2081,12 @@ export class WorldScene extends Scene {
         this.placeHudButtons();
     }
 
-    private treasureHudUnlocked (): boolean {
-        return this.foundCount >= 1;
-    }
-
-    private abcHudUnlocked (): boolean {
-        return this.foundCount >= 2;
-    }
-
     private refreshTreasureHud (): void {
         if (!this.hudChest) {
             return;
         }
 
-        const unlocked = this.treasureHudUnlocked();
+        const unlocked = treasureHudUnlocked(this.foundCount);
         this.hudChest.setVisible(unlocked);
 
         if (this.hudChest.input) {
@@ -2128,7 +2117,7 @@ export class WorldScene extends Scene {
             return;
         }
 
-        const unlocked = this.abcHudUnlocked();
+        const unlocked = abcHudUnlocked(this.foundCount) && showTypingMinigame();
         this.hudAbc.setVisible(unlocked);
 
         if (this.hudAbc.input) {
@@ -2159,7 +2148,7 @@ export class WorldScene extends Scene {
             return;
         }
 
-        const unlocked = this.abcHudUnlocked();
+        const unlocked = abcHudUnlocked(this.foundCount);
         this.hudSheepVerse.setVisible(unlocked);
 
         if (this.hudSheepVerse.input) {
@@ -2842,7 +2831,7 @@ export class WorldScene extends Scene {
             return;
         }
 
-        if (!this.treasureHudUnlocked()) {
+        if (!treasureHudUnlocked(this.foundCount)) {
             return;
         }
 
@@ -2893,7 +2882,7 @@ export class WorldScene extends Scene {
             return;
         }
 
-        if (!this.abcHudUnlocked()) {
+        if (!abcHudUnlocked(this.foundCount) || !showTypingMinigame()) {
             return;
         }
 
@@ -2911,7 +2900,7 @@ export class WorldScene extends Scene {
         // Stay set until RESUME so blur/hidden during the overlay don't stop BGM.
         this.keepMusicThroughPause = true;
         this.scene.pause();
-        this.scene.launch('MinigameScene');
+        this.scene.launch('MinigameScene', { returnTo: 'WorldScene' });
     }
 
     private openSheepMinigame (): void {
@@ -2919,7 +2908,7 @@ export class WorldScene extends Scene {
             return;
         }
 
-        if (!this.abcHudUnlocked()) {
+        if (!abcHudUnlocked(this.foundCount)) {
             return;
         }
 
@@ -2936,7 +2925,7 @@ export class WorldScene extends Scene {
         pauseSpeech();
         this.keepMusicThroughPause = true;
         this.scene.pause();
-        this.scene.launch('SheepVerseScene');
+        this.scene.launch('SheepVerseScene', { returnTo: 'WorldScene' });
     }
 
     private beginNight (): void {
@@ -4247,7 +4236,7 @@ export class WorldScene extends Scene {
             return;
         }
 
-        if (this.nextNames.some((name) => FLOCK_NAMES.includes(name))) {
+        if (this.nextNames.some((name) => isFlockName(name))) {
             return;
         }
 
@@ -4452,14 +4441,16 @@ export class WorldScene extends Scene {
 
     private spawnSheep (name: string, slot: number): boolean {
         // Planned spots live in the save, but only one story find is on the map at a time.
-        if (FLOCK_NAMES.includes(name)) {
+        if (isFlockName(name)) {
             if (this.hasActiveFlockFind()) {
                 return false;
             }
 
-            const expected = FLOCK_NAMES[this.foundCount];
-
-            if (expected && name !== expected) {
+            if (!canSpawnFlockName({
+                name,
+                foundCount: this.foundCount,
+                hasActiveFlockFind: false
+            })) {
                 return false;
             }
         }
@@ -4479,7 +4470,7 @@ export class WorldScene extends Scene {
             return findPointAwayFromAll(placed, WAITING_SPAWN_MIN, WAITING_SPAWN_GAP);
         })();
 
-        if (name === 'Biscuit' && !this.heardPsalm3) {
+        if (shouldTrapInHole(name, this.heardPsalm3)) {
             this.hole = new Hole(this, spawn.x, spawn.y);
             const trapped = this.createFlockMember(spawn.x, spawn.y + 10, name, slot);
             trapped.trapInHole();
@@ -4517,7 +4508,7 @@ export class WorldScene extends Scene {
             Object.assign(fixed, this.sheepSpawns);
         }
 
-        this.sheepSpawns = planSheepSpawns(FLOCK_NAMES, anchors, fixed);
+        this.sheepSpawns = planSheepSpawns([...FLOCK_NAMES], anchors, fixed);
     }
 
     private maybeStrayFlock (): void {

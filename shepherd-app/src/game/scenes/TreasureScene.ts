@@ -16,6 +16,7 @@ import {
     SHEEP_VERSE_LIST_SIZE,
     ensureSheepVerseIcon
 } from '../ui/sheepVerseIcon';
+import { showTypingMinigame } from '../ui/platform';
 import { speakCue, stopSpeech } from '../ui/speech';
 
 const UMBER = '#3d2c1e';
@@ -27,6 +28,8 @@ const LINK_HOVER = '#1a3344';
 export class TreasureScene extends Scene {
     private scroll!: PaperScroll;
     private unlockedPassages: MinigamePassage[] = [];
+    /** When true, SHUTDOWN stops speech (back to world). Minigame handoff leaves speech alone. */
+    private stopSpeechOnShutdown = true;
 
     constructor () {
         super('TreasureScene');
@@ -39,6 +42,7 @@ export class TreasureScene extends Scene {
         foundThornVerses?: string[];
         heard?: Parameters<typeof unlockedStoryPassages>[0];
     }): void {
+        this.stopSpeechOnShutdown = true;
         ensureAbcKeyboardIcon(this);
         ensureSheepVerseIcon(this);
 
@@ -94,7 +98,11 @@ export class TreasureScene extends Scene {
         y = this.addSection(y, 'Along the way', story, wrap, true);
         this.scroll.finish(y);
 
-        this.events.once(Scenes.Events.SHUTDOWN, () => stopSpeech());
+        this.events.once(Scenes.Events.SHUTDOWN, () => {
+            if (this.stopSpeechOnShutdown) {
+                stopSpeech();
+            }
+        });
     }
 
     private addSection (
@@ -138,21 +146,19 @@ export class TreasureScene extends Scene {
             }).setOrigin(0.5, 0);
             this.scroll.root.add(ref);
 
-            const abc = this.add.image(
-                ref.displayWidth / 2 + 18,
-                y + ref.height / 2,
-                ABC_KEYBOARD_KEY
-            )
-                .setDisplaySize(ABC_KEYBOARD_LIST_SIZE, ABC_KEYBOARD_LIST_SIZE)
-                .setOrigin(0, 0.5);
-            this.scroll.root.add(abc);
-            this.makeAbcButton(abc, passage);
+            const midY = y + ref.height / 2;
+            let nextBtnX = ref.displayWidth / 2 + 18;
 
-            const sheep = this.add.image(
-                abc.x + ABC_KEYBOARD_LIST_SIZE + 8,
-                y + ref.height / 2,
-                SHEEP_VERSE_KEY
-            )
+            if (showTypingMinigame()) {
+                const abc = this.add.image(nextBtnX, midY, ABC_KEYBOARD_KEY)
+                    .setDisplaySize(ABC_KEYBOARD_LIST_SIZE, ABC_KEYBOARD_LIST_SIZE)
+                    .setOrigin(0, 0.5);
+                this.scroll.root.add(abc);
+                this.makeAbcButton(abc, passage);
+                nextBtnX = abc.x + ABC_KEYBOARD_LIST_SIZE + 8;
+            }
+
+            const sheep = this.add.image(nextBtnX, midY, SHEEP_VERSE_KEY)
                 .setDisplaySize(SHEEP_VERSE_LIST_SIZE, SHEEP_VERSE_LIST_SIZE)
                 .setOrigin(0, 0.5);
             this.scroll.root.add(sheep);
@@ -206,6 +212,7 @@ export class TreasureScene extends Scene {
 
     private openMinigame (passage: { ref: string; text: string }): void {
         stopSpeech();
+        this.stopSpeechOnShutdown = false;
         const queue = buildTreasurePracticeQueue(passage, this.unlockedPassages);
         this.scene.launch('MinigameScene', {
             queue,
@@ -216,6 +223,7 @@ export class TreasureScene extends Scene {
 
     private openSheepMinigame (passage: { ref: string; text: string }): void {
         stopSpeech();
+        this.stopSpeechOnShutdown = false;
         const queue = buildTreasurePracticeQueue(passage, this.unlockedPassages);
         this.scene.launch('SheepVerseScene', {
             queue,

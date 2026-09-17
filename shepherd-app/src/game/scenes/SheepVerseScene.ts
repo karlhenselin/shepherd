@@ -239,6 +239,8 @@ export class SheepVerseScene extends Scene {
         this.speakGen += 1;
         stopSpeech();
         this.teardownPlay();
+        this.queue = null;
+        this.queueIndex = 0;
         this.scene.stop();
 
         if (this.returnTo === 'TreasureScene') {

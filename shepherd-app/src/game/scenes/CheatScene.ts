@@ -1,6 +1,7 @@
 import { Scene, GameObjects } from 'phaser';
 import { CHEAT_SPOTS, CheatSpot } from '../save/cheatSaves';
 import { clearSave, writeSave } from '../save/gameSave';
+import { applyCheatSave } from '../save/progression';
 import { createPaperScroll, DRAG_CLICK_SLOP, type PaperScroll } from '../ui/paperScroll';
 
 const LINK = '#2c4a5e';
@@ -54,11 +55,7 @@ export class CheatScene extends Scene {
 
     private jumpTo (spot: CheatSpot): void {
         if (spot.save) {
-            writeSave({
-                ...spot.save,
-                achievementsDisabled: true,
-                unlockedAchievements: []
-            });
+            writeSave(applyCheatSave(spot.save));
         }
         else {
             clearSave();

@@ -337,6 +337,8 @@ export class MinigameScene extends Scene {
         this.closing = true;
         stopSpeech();
         this.teardownPlay();
+        this.queue = null;
+        this.queueIndex = 0;
         this.scene.stop();
 
         if (this.returnTo === 'TreasureScene') {

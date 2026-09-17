@@ -83,7 +83,11 @@ function flockThrough (lastFound: number): Pick<GameSave, 'foundCount' | 'foundN
 }
 
 function foundFirst (): GameSave {
-    return blank('found-sheep', flockThrough(1));
+    // After the find speech: Psalm 23:1a is marked and the flock is hungry for pasture.
+    return blank('found-sheep', {
+        ...flockThrough(1),
+        heardPsalm1: true
+    });
 }
 
 function psalm231 (): GameSave {

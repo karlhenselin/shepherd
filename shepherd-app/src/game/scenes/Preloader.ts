@@ -75,6 +75,7 @@ export class Preloader extends Scene
         this.load.image('picnic', 'picnic.png');
         this.load.image('shade-tree', 'shade-tree.png');
         this.load.image('treasure-chest', 'treasure-chest.png');
+        this.load.image('sheep-verse', 'sheep-verse-icon.png');
         this.load.audio('exhale', 'audio/exhale.mp3');
         this.load.audio('wanderlust', 'music/wanderlust-justin-lee-main-version-29117-01-40.mp3');
         this.load.audio('wonders-of-nature', 'music/wonders-of-nature-roger-gabalda-main-version-01-31-11044.mp3');
