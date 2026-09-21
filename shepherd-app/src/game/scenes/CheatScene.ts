@@ -1,5 +1,6 @@
 import { Scene, GameObjects } from 'phaser';
 import { CHEAT_SPOTS, CheatSpot } from '../save/cheatSaves';
+import { isSuperSpeed, toggleSuperSpeed } from '../save/cheatSpeed';
 import { clearSave, writeSave } from '../save/gameSave';
 import { applyCheatSave } from '../save/progression';
 import { createPaperScroll, DRAG_CLICK_SLOP, type PaperScroll } from '../ui/paperScroll';
@@ -23,29 +24,61 @@ export class CheatScene extends Scene {
             onBack: () => this.close()
         });
 
-        CHEAT_SPOTS.forEach((spot, index) => {
-            const y = index * ROW + ROW / 2;
-            const button = this.add.text(0, y, spot.label, {
-                fontFamily: 'Georgia, Palatino, serif',
-                fontSize: '22px',
-                color: LINK,
-                align: 'center',
-                padding: { x: 18, y: 10 }
-            }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+        let y = ROW / 2;
+        this.addToggleRow(y, () => isSuperSpeed() ? 'Superspeed: on' : 'Superspeed: off', () => {
+            toggleSuperSpeed();
+        });
+        y += ROW;
 
-            button.setData('ui', true);
-            this.tintOnHover(button, LINK, LINK_HOVER);
-            button.on('pointerup', (pointer: { y: number }) => {
-                if (this.scroll.dragDistance > DRAG_CLICK_SLOP || !this.scroll.inBand(pointer.y)) {
-                    return;
-                }
-
-                this.jumpTo(spot);
-            });
-            this.scroll.root.add(button);
+        CHEAT_SPOTS.forEach((spot) => {
+            this.addJumpRow(y, spot);
+            y += ROW;
         });
 
-        this.scroll.finish(CHEAT_SPOTS.length * ROW);
+        this.scroll.finish(ROW + CHEAT_SPOTS.length * ROW);
+    }
+
+    private addToggleRow (y: number, label: () => string, onToggle: () => void): void {
+        const button = this.add.text(0, y, label(), {
+            fontFamily: 'Georgia, Palatino, serif',
+            fontSize: '22px',
+            color: LINK,
+            align: 'center',
+            padding: { x: 18, y: 10 }
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+        button.setData('ui', true);
+        this.tintOnHover(button, LINK, LINK_HOVER);
+        button.on('pointerup', (pointer: { y: number }) => {
+            if (this.scroll.dragDistance > DRAG_CLICK_SLOP || !this.scroll.inBand(pointer.y)) {
+                return;
+            }
+
+            onToggle();
+            button.setText(label());
+        });
+        this.scroll.root.add(button);
+    }
+
+    private addJumpRow (y: number, spot: CheatSpot): void {
+        const button = this.add.text(0, y, spot.label, {
+            fontFamily: 'Georgia, Palatino, serif',
+            fontSize: '22px',
+            color: LINK,
+            align: 'center',
+            padding: { x: 18, y: 10 }
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+        button.setData('ui', true);
+        this.tintOnHover(button, LINK, LINK_HOVER);
+        button.on('pointerup', (pointer: { y: number }) => {
+            if (this.scroll.dragDistance > DRAG_CLICK_SLOP || !this.scroll.inBand(pointer.y)) {
+                return;
+            }
+
+            this.jumpTo(spot);
+        });
+        this.scroll.root.add(button);
     }
 
     private tintOnHover (text: GameObjects.Text, rest: string, hover: string): void {

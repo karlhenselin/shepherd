@@ -43,7 +43,7 @@ function blank (checkpoint: StoryCheckpoint, extra: Partial<GameSave> = {}): Gam
     const start = startCenter();
     const pen = defaultPenSpot();
 
-    return {
+    const save: GameSave = {
         version: 1,
         checkpoint,
         foundCount: 0,
@@ -70,6 +70,13 @@ function blank (checkpoint: StoryCheckpoint, extra: Partial<GameSave> = {}): Gam
         sheepSpawns: planSheepSpawns([...FLOCK], [start, pen]),
         ...extra
     };
+
+    // Pastures unlock the blue arrow tip — later cheat spots skip replaying it.
+    if (save.heardPsalm2 && save.heardGemArrowTip == null) {
+        save.heardGemArrowTip = true;
+    }
+
+    return save;
 }
 
 function flockThrough (lastFound: number): Pick<GameSave, 'foundCount' | 'foundNames' | 'waitingName' | 'nextNames'> {

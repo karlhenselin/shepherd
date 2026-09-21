@@ -4,6 +4,7 @@ import { foundTreeVerses } from '../data/treeVerses';
 import { foundWaterVerses } from '../data/waterVerses';
 import { foundThornVerses } from '../data/thornVerses';
 import { buildTreasurePracticeQueue, type MinigamePassage } from '../data/minigameVerses';
+import { abcHudUnlocked } from '../save/progression';
 import { loadSave } from '../save/gameSave';
 import { createPaperScroll, DRAG_CLICK_SLOP, type PaperScroll } from '../ui/paperScroll';
 import {
@@ -25,9 +26,13 @@ const LINE = '#4a3728';
 const LINK = '#2c4a5e';
 const LINK_HOVER = '#1a3344';
 
+const JOURNAL_LINE =
+    'I will write down all the verses I find in my journal. I can review them here anytime.';
+
 export class TreasureScene extends Scene {
     private scroll!: PaperScroll;
     private unlockedPassages: MinigamePassage[] = [];
+    private minigamesUnlocked = false;
     /** When true, SHUTDOWN stops speech (back to world). Minigame handoff leaves speech alone. */
     private stopSpeechOnShutdown = true;
 
@@ -40,13 +45,21 @@ export class TreasureScene extends Scene {
         foundWaterVerses?: string[];
         foundTreeVerses?: string[];
         foundThornVerses?: string[];
+        foundCount?: number;
+        firstOpen?: boolean;
         heard?: Parameters<typeof unlockedStoryPassages>[0];
     }): void {
         this.stopSpeechOnShutdown = true;
-        ensureAbcKeyboardIcon(this);
-        ensureSheepVerseIcon(this);
 
         const save = loadSave();
+        const foundCount = data?.foundCount ?? save?.foundCount ?? 0;
+        this.minigamesUnlocked = abcHudUnlocked(foundCount);
+
+        if (this.minigamesUnlocked) {
+            ensureAbcKeyboardIcon(this);
+            ensureSheepVerseIcon(this);
+        }
+
         const foundIds = data?.foundGems ?? save?.foundGems ?? [];
         const waterIds = data?.foundWaterVerses ?? save?.foundWaterVerses ?? [];
         const treeIds = data?.foundTreeVerses ?? save?.foundTreeVerses ?? [];
@@ -98,6 +111,10 @@ export class TreasureScene extends Scene {
         y = this.addSection(y, 'Along the way', story, wrap, true);
         this.scroll.finish(y);
 
+        if (data?.firstOpen) {
+            speakCue(JOURNAL_LINE);
+        }
+
         this.events.once(Scenes.Events.SHUTDOWN, () => {
             if (this.stopSpeechOnShutdown) {
                 stopSpeech();
@@ -146,23 +163,25 @@ export class TreasureScene extends Scene {
             }).setOrigin(0.5, 0);
             this.scroll.root.add(ref);
 
-            const midY = y + ref.height / 2;
-            let nextBtnX = ref.displayWidth / 2 + 18;
+            if (this.minigamesUnlocked) {
+                const midY = y + ref.height / 2;
+                let nextBtnX = ref.displayWidth / 2 + 18;
 
-            if (showTypingMinigame()) {
-                const abc = this.add.image(nextBtnX, midY, ABC_KEYBOARD_KEY)
-                    .setDisplaySize(ABC_KEYBOARD_LIST_SIZE, ABC_KEYBOARD_LIST_SIZE)
+                if (showTypingMinigame()) {
+                    const abc = this.add.image(nextBtnX, midY, ABC_KEYBOARD_KEY)
+                        .setDisplaySize(ABC_KEYBOARD_LIST_SIZE, ABC_KEYBOARD_LIST_SIZE)
+                        .setOrigin(0, 0.5);
+                    this.scroll.root.add(abc);
+                    this.makeAbcButton(abc, passage);
+                    nextBtnX = abc.x + ABC_KEYBOARD_LIST_SIZE + 8;
+                }
+
+                const sheep = this.add.image(nextBtnX, midY, SHEEP_VERSE_KEY)
+                    .setDisplaySize(SHEEP_VERSE_LIST_SIZE, SHEEP_VERSE_LIST_SIZE)
                     .setOrigin(0, 0.5);
-                this.scroll.root.add(abc);
-                this.makeAbcButton(abc, passage);
-                nextBtnX = abc.x + ABC_KEYBOARD_LIST_SIZE + 8;
+                this.scroll.root.add(sheep);
+                this.makeSheepVerseButton(sheep, passage);
             }
-
-            const sheep = this.add.image(nextBtnX, midY, SHEEP_VERSE_KEY)
-                .setDisplaySize(SHEEP_VERSE_LIST_SIZE, SHEEP_VERSE_LIST_SIZE)
-                .setOrigin(0, 0.5);
-            this.scroll.root.add(sheep);
-            this.makeSheepVerseButton(sheep, passage);
 
             y += 26;
 

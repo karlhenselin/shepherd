@@ -59,6 +59,8 @@ export type GameSave = {
     triedMinigame?: boolean;
     /** Player has opened the sheep-click verse minigame at least once. */
     triedSheepMinigame?: boolean;
+    /** Heard the sheep-click minigame how-to tip. */
+    heardSheepVerseDirections?: boolean;
     /** Player has opened Bible Treasures at least once. */
     triedTreasure?: boolean;
     /** Heard the white (main quest) arrow tip. */
@@ -112,6 +114,17 @@ export function markSheepMinigameTried (): void {
     }
 
     writeSave({ ...save, triedSheepMinigame: true });
+}
+
+/** Persist that the sheep-click how-to tip has been heard. */
+export function markSheepVerseDirectionsHeard (): void {
+    const save = loadSave();
+
+    if (!save || save.heardSheepVerseDirections) {
+        return;
+    }
+
+    writeSave({ ...save, heardSheepVerseDirections: true });
 }
 
 /** Persist that Bible Treasures has been opened (stops HUD attention pulse). */

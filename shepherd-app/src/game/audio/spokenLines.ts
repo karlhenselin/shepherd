@@ -37,21 +37,21 @@ const STATIC_LINES = [
     'In the beginning',
     'God',
     'created the heavens and the earth',
-    'Find your sheep.',
-    'Another sheep is missing.',
-    'A sheep is missing.',
+    'I need to find my sheep.',
+    'Another of my sheep is missing.',
+    'One of my sheep is missing.',
     'Get closer.',
-    'The sheep are thirsty.',
-    'The flock is drinking.',
-    'The sheep are hungry.',
+    'My sheep are thirsty.',
+    'My flock is drinking.',
+    'My sheep are hungry.',
     'Enlarge the flock.',
     'Enter the city.',
-    'The flock is home.',
+    'My flock is home.',
     'I need my staff.',
-    'Guide the flock to the pen.',
-    'You reached the pen.',
-    'Night is falling.',
-    'You found a Bible gem.',
+    'I need to guide my flock to the pen.',
+    'I made it to the pen.',
+    'Night is falling—I should get everyone home.',
+    'I found a Bible gem.',
     'Discover more Bible Gems',
     'Drink from the water of Life',
     'Enjoy the shade',
@@ -70,6 +70,10 @@ const STATIC_LINES = [
     'Easy, Biscuit.',
     'Gentle now, Biscuit.',
     'Tiny Biscuit.',
+    'The white arrow leads me to my main quest.',
+    'The blue arrow points me to the nearest Bible verse.',
+    'Tap the sheep in order. Click the ear to hear the passage again.',
+    'I will write down all the verses I find in my journal. I can review them here anytime.',
     'I\'ll name you Sarah!',
     'What a mane.',
     'Good lion.',
@@ -92,16 +96,17 @@ const STATIC_LINES = [
 
 const NAMED_TEMPLATES: Array<(name: string) => string> = [
     (name) => `${name}! I found you!`,
-    (name) => `${name} is hurt.`,
-    (name) => `${name} is nervous. Stay together.`,
-    (name) => `${name} is eating.`,
-    (name) => `${name} is drinking.`,
-    (name) => `${name} is hungry.`,
+    (name) => `${name}'s hurt—I need to help.`,
+    (name) => `${name}'s nervous. I'll stay close.`,
+    (name) => `${name}'s eating.`,
+    (name) => `${name}'s drinking.`,
+    (name) => `${name}'s hungry.`,
     (name) => `Help ${name}!`,
-    (name) => `You free ${name} from the thorns.`,
-    (name) => `You bandage ${name}.`,
-    (name) => `Bandage ${name}.`,
-    (name) => `${name} wandered off.`,
+    (name) => `I free ${name} from the thorns.`,
+    (name) => `I bandage ${name}.`,
+    (name) => `I need to bandage ${name}.`,
+    (name) => `${name} wandered off—I need to find them.`,
+    (name) => `I should find ${name}.`,
     (name) => `Got you, ${name}!`,
     (name) => `Hey ${name}.`,
     (name) => `Hey ${name}!`,
@@ -156,10 +161,10 @@ export function allSpokenLines (): string[] {
     lines.add(scriptureLine(JOHN_14_6));
     lines.add(scriptureLine(CORINTHIANS_15_51));
     lines.add(scriptureLine(ISAIAH_53_6));
-    lines.add('Walk toward the wolf to scare it away from the flock.');
+    lines.add('I\'ll walk toward the wolf to scare it away from my flock.');
     lines.add('Keep following the white arrow.');
-    lines.add('The white arrow leads you to your main quest.');
-    lines.add('The blue arrow points to the nearest Bible verse.');
+    lines.add('The white arrow leads me to my main quest.');
+    lines.add('The blue arrow points me to the nearest Bible verse.');
     lines.add('Collect them all.');
 
     for (const gem of BIBLE_GEMS) {

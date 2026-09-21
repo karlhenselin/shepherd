@@ -57,12 +57,14 @@ import {
     PEACEABLE_JOINERS,
     abcHudUnlocked,
     canSpawnFlockName,
+    hasMissingSheep,
     isFlockName,
     shouldAwaitHoleSheep,
     shouldHaveLostSheep,
     shouldTrapInHole,
     treasureHudUnlocked
 } from '../save/progression';
+import { hasUndiscoveredFind, objectiveCue } from '../save/objectiveCue';
 const SHEPHERD_SPEED = 180;
 const STRAY_AHEAD_DISTANCE = FOLLOW_DISTANCE + (SHEPHERD_SPEED - FOLLOW_SPEED) * 7;
 /** Once lagging sheep crosses this fraction of stray distance, fire one warning baah. */
@@ -70,8 +72,6 @@ const STRAY_WARN_RATIO = 0.78;
 /** Drop below this fraction to allow another warning if they fall behind again. */
 const STRAY_WARN_RESET_RATIO = 0.55;
 const STRAY_COOLDOWN_MS = 18000;
-const STRAY_TELEPORT_MIN = 1300;
-const STRAY_TELEPORT_GAP = 200;
 /** Fallback when a planned sheep spot is missing (peaceable joiners, legacy saves). */
 const WAITING_SPAWN_MIN = GOAL_WALK_MIN;
 const WAITING_SPAWN_GAP = GOAL_WALK_MIN;
@@ -110,7 +110,7 @@ const PEN_SLEEP_DELAY_MS = 1000;
 const TABLE_GATE_PAUSE_MS = 3000;
 /** Slow walk from the picnic to the south opening. */
 const TABLE_GATE_WALK_SPEED = 58;
-/** Pause after the scare beat before speaking Psalm 23:4b. */
+/** Pause after night falls before speaking Psalm 23:4b. */
 const FEAR_NO_EVIL_DELAY_MS = 3000;
 /** Pause after Psalm 23:4b before the night wolf lesson. */
 const WOLF_LESSON_PAUSE_MS = 1400;
@@ -416,7 +416,7 @@ export class WorldScene extends Scene {
         }
 
         const cue = cuePad();
-        this.cueText = this.add.text(cue.x, cue.y, 'Find your sheep.', {
+        this.cueText = this.add.text(cue.x, cue.y, 'I need to find my sheep.', {
             fontFamily: 'Georgia, serif',
             fontSize: '18px',
             color: '#3d2c1e',
@@ -472,15 +472,14 @@ export class WorldScene extends Scene {
             }
 
             this.restoreSave(save);
-
-            if (!this.scriptPlaying) {
-                this.showCue(this.flockCue());
-            }
+            // Always refresh the banner — wolf-lesson restore sets scriptPlaying and used
+            // to leave the default "I need to find my sheep." text on screen.
+            this.showCue(this.flockCue(), false);
         }
         else {
             this.ensureSheepSpawns();
             this.spawnSheep(FLOCK_NAMES[0], 0);
-            this.showCue('Find your sheep.');
+            this.showCue('I need to find my sheep.');
             // Persist planned spots immediately so a reload keeps the same finds.
             this.saveProgress('found-sheep');
         }
@@ -606,7 +605,7 @@ export class WorldScene extends Scene {
         this.tickThorns();
         this.sheepfold?.tickGlow(this.nightVeil.alpha, this.time.now);
         tickSheepSounds(this, this.flock, this.shepherd.sprite, this.nightStarted);
-        this.lostHint.update(this, this.shepherd, this.hintTarget(), Boolean(this.staffPickup));
+        this.lostHint.update(this, this.shepherd, this.hintTarget(), this.keepHomeHintOnScreen());
         this.gemHint.update(this, this.shepherd, this.gemHintTarget());
         this.maybeBeginWellDone();
         this.updateBandageButton();
@@ -756,8 +755,7 @@ export class WorldScene extends Scene {
 
         if (sheep.hurt) {
             this.playLines([
-                `${sheep.name}! I found you!`,
-                `${sheep.name} is hurt.`
+                `${sheep.name}'s hurt—I need to help.`
             ]);
             return;
         }
@@ -767,9 +765,9 @@ export class WorldScene extends Scene {
             this.spawnNextSheep();
             this.playLines([
                 `${sheep.name}! I found you!`,
-                `${sheep.name} is nervous. Stay together.`
+                `${sheep.name}'s nervous. I'll stay close.`
             ], () => {
-                this.showCue('A sheep is missing.');
+                this.showCue(this.flockCue());
             });
             return;
         }
@@ -861,13 +859,13 @@ export class WorldScene extends Scene {
         if (verseId) {
             this.foundWaterVerses.push(verseId);
             this.saveProgress(this.lastCheckpoint ?? 'found-gem');
-            // Verse only — don't lead with "The flock is drinking."
+            // Verse only — don't lead with "My flock is drinking."
             this.continueLines([waterVerseLine(verseId)]);
             return;
         }
 
         // All water passages heard; announce the drink itself.
-        this.continueLines(['The flock is drinking.']);
+        this.continueLines(['My flock is drinking.']);
     }
 
     private playLines (lines: string[], onDone?: () => void): void {
@@ -993,7 +991,7 @@ export class WorldScene extends Scene {
         this.heardQuestArrowTip = true;
         this.lostHint.pulse(4500);
         this.playLines([
-            'The white arrow leads you to your main quest.'
+            'The white arrow leads me to my main quest.'
         ], () => {
             this.lostHint.stopPulse();
             this.persistArrowTips();
@@ -1020,7 +1018,7 @@ export class WorldScene extends Scene {
         this.heardGemArrowTip = true;
         this.gemHint.pulse(5000);
         this.playLines([
-            'The blue arrow points to the nearest Bible verse.',
+            'The blue arrow points me to the nearest Bible verse.',
             'Collect them all.'
         ], () => {
             this.gemHint.stopPulse();
@@ -1053,91 +1051,41 @@ export class WorldScene extends Scene {
         const hungry = this.flock.filter((sheep) => sheep.hungry && sheep.mood !== 'waiting');
 
         if (hungry.length === 1) {
-            return `${hungry[0].name} is hungry.`;
+            return `${hungry[0].name}'s hungry.`;
         }
 
-        return 'The sheep are hungry.';
+        return 'My sheep are hungry.';
     }
 
     private flockCue (): string {
-        const hurt = this.hurtNeedingBandage();
-
-        if (hurt?.hurtByWolf || hurt?.snaredInThorns) {
-            return `Help ${hurt.name}!`;
-        }
-
-        if (hurt) {
-            return `Bandage ${hurt.name}.`;
-        }
-
-        const drinking = this.flock.some((sheep) => sheep.mood === 'drinking');
-
-        if (drinking) {
-            return 'The flock is drinking.';
-        }
-
-        const wandered = this.flock.find((sheep) => sheep.mood === 'waiting' && sheep.discovered);
-
-        if (wandered) {
-            return `${wandered.name} wandered off.`;
-        }
-
-        if (this.hasSheepToFind()) {
-            const seek = this.flock.find((sheep) =>
-                sheep.peaceable && (sheep.mood === 'waiting' || sheep.hurt) && !sheep.discovered
-            );
-
-            if (seek) {
-                return 'Enlarge the flock.';
-            }
-
-            return this.foundCount === 1 ? 'Another sheep is missing.' : 'Find your sheep.';
-        }
-
-        if (this.cityObjectiveOpen()) {
-            return 'Enter the city.';
-        }
-
-        if (this.flock.some((sheep) => sheep.hungry) && !this.heardCorinthians) {
-            return this.hungryCue();
-        }
-
-        if (this.flock.some((sheep) => sheep.thirsty) && !this.heardCorinthians) {
-            return 'The sheep are thirsty.';
-        }
-
-        if (this.heardJohn109 && !this.heardCorinthians) {
-            return 'The flock is home.';
-        }
-
-        if (this.staffPickup && !this.shepherd.hasStaff) {
-            return 'I need my staff.';
-        }
-
-        if (this.nightStarted) {
-            if (!this.heardJohn102) {
-                return 'Guide the flock to the pen.';
-            }
-
-            return 'You reached the pen.';
-        }
-
-        if (this.foundGems.length < BIBLE_GEMS.length) {
-            return 'Discover more Bible Gems';
-        }
-
-        if (nextWaterVerseId(this.foundWaterVerses)) {
-            return 'Drink from the water of Life';
-        }
-
-        return 'Enjoy the shade';
+        return objectiveCue({
+            flock: this.flock.map((sheep) => ({
+                name: sheep.name,
+                mood: sheep.mood,
+                hurt: sheep.hurt,
+                discovered: sheep.discovered,
+                hungry: sheep.hungry,
+                thirsty: sheep.thirsty,
+                peaceable: sheep.peaceable,
+                hurtByWolf: sheep.hurtByWolf,
+                snaredInThorns: sheep.snaredInThorns
+            })),
+            foundCount: this.foundCount,
+            nightStarted: this.nightStarted,
+            hasStaff: this.shepherd.hasStaff,
+            staffOnGround: Boolean(this.staffPickup),
+            heardCorinthians: this.heardCorinthians,
+            heardJohn102: this.heardJohn102,
+            heardJohn109: this.heardJohn109,
+            cityOpen: this.cityObjectiveOpen(),
+            gemsRemaining: this.foundGems.length < BIBLE_GEMS.length,
+            waterVerseAvailable: Boolean(nextWaterVerseId(this.foundWaterVerses))
+        });
     }
 
     /** Undiscovered waiting / hole sheep still ahead in find order. */
     private hasSheepToFind (): boolean {
-        return this.flock.some((sheep) =>
-            sheep.mood === 'waiting' || (sheep.hurt && !sheep.discovered)
-        );
+        return hasUndiscoveredFind(this.flock);
     }
 
     private hintTarget (): { x: number; y: number } | null {
@@ -1147,15 +1095,30 @@ export class WorldScene extends Scene {
             return { x: hurt.sprite.x, y: hurt.sprite.y };
         }
 
-        const lost = this.flock.filter((sheep) => sheep.mood === 'waiting' || (sheep.hurt && !sheep.discovered));
-        const seek = lost.filter((sheep) => !sheep.discovered);
+        // Recover wanderers before chasing the next story find (Milo → Biscuit, etc.).
+        const wandered = this.flock.filter((sheep) => sheep.mood === 'waiting' && sheep.discovered);
+
+        if (wandered.length > 0) {
+            return this.closestToShepherd(wandered.map((sheep) => sheep.sprite));
+        }
+
+        const seek = this.flock.filter((sheep) =>
+            (sheep.mood === 'waiting' || (sheep.hurt && !sheep.discovered)) && !sheep.discovered
+        );
 
         if (seek.length > 0) {
             return this.closestToShepherd(seek.map((sheep) => sheep.sprite));
         }
 
-        if (lost.length > 0) {
-            return this.closestToShepherd(lost.map((sheep) => sheep.sprite));
+        // Night home objective: staff / pen beat grass & water so the arrow matches the cue.
+        if (this.nightStarted && !this.heardJohn102) {
+            if (this.staffPickup && !this.shepherd.hasStaff) {
+                return this.staffPickup;
+            }
+
+            if (this.shepherd.hasStaff && this.sheepfold) {
+                return this.sheepfold;
+            }
         }
 
         if (!this.heardCorinthians && this.flock.some((sheep) => sheep.hungry)) {
@@ -1425,9 +1388,7 @@ export class WorldScene extends Scene {
     }
 
     private hasLostSheep (): boolean {
-        return this.flock.some((sheep) =>
-            (sheep.mood === 'waiting' || sheep.hurt) && !sheep.discovered
-        );
+        return hasMissingSheep(this.flock);
     }
 
     /** Undiscovered story sheep still out as a find target (not Leo/Sarah). */
@@ -1622,7 +1583,10 @@ export class WorldScene extends Scene {
         this.triedSheepMinigame = save.triedSheepMinigame === true;
         this.triedTreasure = save.triedTreasure === true;
         this.heardQuestArrowTip = save.heardQuestArrowTip === true;
-        this.heardGemArrowTip = save.heardGemArrowTip === true;
+        // Tip plays right after the first meal. Cheats / older saves omit the flag —
+        // once pastures are done, assume it was already heard.
+        this.heardGemArrowTip = save.heardGemArrowTip === true
+            || (save.heardGemArrowTip == null && save.heardPsalm2);
         this.nextNames = [...save.nextNames];
         this.heardPsalm1 = save.heardPsalm1;
         this.heardPsalm1b = save.heardPsalm1b === true;
@@ -1692,18 +1656,13 @@ export class WorldScene extends Scene {
 
         if (save.waitingName) {
             this.spawnSheep(save.waitingName, this.flock.length);
-            const trapped = this.flock[this.flock.length - 1];
-
-            if (save.foundCount >= 3 && trapped.hurt) {
-                trapped.markDiscovered();
-            }
         }
         else if (shouldHaveLostSheep(save)) {
             this.spawnNextSheep();
         }
         else if (shouldAwaitHoleSheep(save)) {
             this.spawnNextSheep();
-            this.showCue('A sheep is missing.');
+            this.showCue(this.flockCue());
         }
 
         if (save.heardPsalm1 && !save.heardPsalm1b && !save.heardPsalm2) {
@@ -1739,7 +1698,7 @@ export class WorldScene extends Scene {
         else if (save.staff) {
             this.staffPickup = new StaffPickup(this, save.staff.x, save.staff.y);
         }
-        else if ((this.heardPsalm4b || this.heardPsalm4c) && !this.heardCorinthians) {
+        else if (this.heardJohn1011 && !this.heardCorinthians) {
             this.placeStaff();
         }
 
@@ -2408,7 +2367,7 @@ export class WorldScene extends Scene {
             }
 
             this.playLines([
-                `You bandage ${hurt.name}.`,
+                `I bandage ${hurt.name}.`,
                 psalm23Half(3, 'a')
             ], () => {
                 this.finishBandageRescue();
@@ -2432,33 +2391,29 @@ export class WorldScene extends Scene {
 
                 hurt.heal();
                 this.shepherd.clearGuidance();
-                this.playLines([`You free ${hurt.name} from the thorns.`], () => {
-                    this.finishThornRescue();
-                });
+
+                // Follow again immediately — don't sit by the bush through the verse.
+                for (const thorn of this.thorns) {
+                    thorn.hideSnare();
+                }
+
+                for (const sheep of this.flock) {
+                    sheep.endRescueWait();
+
+                    if (sheep.mood === 'following' && !sheep.hurt) {
+                        sheep.deferWalkIntoPetting(PETTING_SUPPRESS_MS);
+                    }
+                }
+
+                this.bandageRescuing = false;
+                this.thornsRearmFrom = {
+                    x: this.shepherd.sprite.x,
+                    y: this.shepherd.sprite.y
+                };
+
+                this.playLines([`I free ${hurt.name} from the thorns.`]);
             });
         });
-    }
-
-    private finishThornRescue (): void {
-        this.shepherd.clearGuidance();
-
-        for (const thorn of this.thorns) {
-            thorn.hideSnare();
-        }
-
-        for (const sheep of this.flock) {
-            sheep.endRescueWait();
-
-            if (sheep.mood === 'following' && !sheep.hurt) {
-                sheep.deferWalkIntoPetting(PETTING_SUPPRESS_MS);
-            }
-        }
-
-        this.bandageRescuing = false;
-        this.thornsRearmFrom = {
-            x: this.shepherd.sprite.x,
-            y: this.shepherd.sprite.y
-        };
     }
 
     /** Stand just outside the bramble so the shepherd never has to enter it. */
@@ -2570,7 +2525,7 @@ export class WorldScene extends Scene {
                 hurt.heal();
                 this.parkHealedByFlock(hurt, holeX, holeY);
                 this.playLines([
-                    `You bandage ${hurt.name}.`,
+                    `I bandage ${hurt.name}.`,
                     psalm23Half(3, 'a')
                 ], () => {
                     this.finishBandageRescue();
@@ -2835,6 +2790,7 @@ export class WorldScene extends Scene {
             return;
         }
 
+        const firstOpen = !this.triedTreasure;
         this.triedTreasure = true;
         this.refreshTreasureHud();
 
@@ -2852,6 +2808,8 @@ export class WorldScene extends Scene {
             foundWaterVerses: [...this.foundWaterVerses],
             foundTreeVerses: [...this.foundTreeVerses],
             foundThornVerses: [...this.foundThornVerses],
+            foundCount: this.foundCount,
+            firstOpen,
             heard: {
                 heardPsalm1: this.heardPsalm1,
                 heardPsalm1b: this.heardPsalm1b,
@@ -2940,7 +2898,7 @@ export class WorldScene extends Scene {
         this.nightAfterTree = false;
         this.applyNight(true);
         this.playLines([
-            'Night is falling.',
+            'Night is falling—I should get everyone home.',
             psalm23Half(4, 'a')
         ], () => {
             this.beginStaffBeat();
@@ -2986,25 +2944,20 @@ export class WorldScene extends Scene {
             return;
         }
 
-        this.placeStaff();
-        this.playLines([
-            'I need my staff.'
-        ], () => {
-            this.time.delayedCall(FEAR_NO_EVIL_DELAY_MS, () => {
-                if (!this.sys.isActive() || this.heardPsalm4b) {
-                    return;
-                }
+        this.time.delayedCall(FEAR_NO_EVIL_DELAY_MS, () => {
+            if (!this.sys.isActive() || this.heardPsalm4b) {
+                return;
+            }
 
-                this.playLines([psalm23Half(4, 'b')], () => {
-                    stopHowling();
-                    this.beginWolfLesson();
-                });
+            this.playLines([psalm23Half(4, 'b')], () => {
+                stopHowling();
+                this.beginWolfLesson();
             });
         });
     }
 
     /**
-     * First night wolf: pause, speak John 10:11, show scare-away, then point to the pen arrow.
+     * First night wolf: pause, speak John 10:11, show scare-away, then ask for the staff.
      */
     private beginWolfLesson (): void {
         if (this.heardCorinthians) {
@@ -3016,6 +2969,7 @@ export class WorldScene extends Scene {
             return;
         }
 
+        // Hold input while the wolf walks in; clear before playLines or lines queue forever.
         this.scriptPlaying = true;
         this.spawnLessonWolf();
 
@@ -3025,9 +2979,10 @@ export class WorldScene extends Scene {
                 return;
             }
 
+            this.scriptPlaying = false;
             this.playLines([
                 john10Line(11),
-                'Walk toward the wolf to scare it away from the flock.'
+                'I\'ll walk toward the wolf to scare it away from my flock.'
             ], () => {
                 if (!this.sys.isActive()) {
                     return;
@@ -3040,9 +2995,12 @@ export class WorldScene extends Scene {
                     }
 
                     this.heardJohn1011 = true;
+                    this.placeStaff();
                     this.saveProgress(this.lastCheckpoint ?? 'psalm-23-4b');
+                    this.pulseHomeHint();
+                    this.scriptPlaying = false;
                     this.playLines([
-                        'Keep following the white arrow.'
+                        'I need my staff.'
                     ], () => {
                         this.finishWolfLesson();
                     });
@@ -3144,7 +3102,32 @@ export class WorldScene extends Scene {
             this.ensureWolf();
         }
 
-        this.showCue('Guide the flock to the pen.');
+        if (this.staffPickup && !this.shepherd.hasStaff) {
+            this.showCue('I need my staff.');
+            this.pulseHomeHint();
+            return;
+        }
+
+        this.showCue('I need to guide my flock to the pen.');
+        this.pulseHomeHint();
+    }
+
+    /** Keep the white arrow up while fetching the staff or walking the flock home. */
+    private keepHomeHintOnScreen (): boolean {
+        if (this.staffPickup && !this.shepherd.hasStaff) {
+            return true;
+        }
+
+        return this.nightStarted && this.shepherd.hasStaff && !this.heardJohn102;
+    }
+
+    /** Teach the staff / pen objective with a pulsing arrow. */
+    private pulseHomeHint (): void {
+        if (!this.hintTarget()) {
+            return;
+        }
+
+        this.lostHint.pulse(4500);
     }
 
     private ensurePen (at?: { x: number; y: number } | null): Sheepfold {
@@ -3322,7 +3305,14 @@ export class WorldScene extends Scene {
         this.saveProgress('found-staff');
 
         const lines = [psalm23Comfort()];
-        this.playLines(lines);
+        this.playLines(lines, () => {
+            if (!this.sys.isActive() || this.heardJohn102) {
+                return;
+            }
+
+            this.showCue('I need to guide my flock to the pen.');
+            this.pulseHomeHint();
+        });
     }
 
     private maybeCollectGem (): void {
@@ -3354,7 +3344,7 @@ export class WorldScene extends Scene {
         this.saveProgress(this.lastCheckpoint ?? 'found-gem');
 
         const lines = firstBibleGem
-            ? ['You found a Bible gem.', gem.line()]
+            ? ['I found a Bible gem.', gem.line()]
             : [gem.line()];
 
         if (this.scriptPlaying) {
@@ -4559,7 +4549,7 @@ export class WorldScene extends Scene {
             }
         }
 
-        // One clear warning baah as they fall behind — not every frame, and not at teleport.
+        // One clear warning baah as they fall behind — not every frame.
         if (
             farthestDist >= STRAY_AHEAD_DISTANCE * STRAY_WARN_RATIO
             && farthestDist < STRAY_AHEAD_DISTANCE
@@ -4575,18 +4565,8 @@ export class WorldScene extends Scene {
             return;
         }
 
-        const placed = [
-            { x: sx, y: sy },
-            ...this.flock.map((sheep) => ({ x: sheep.sprite.x, y: sheep.sprite.y })),
-            ...this.grass,
-            ...this.water,
-            ...this.gems,
-            this.sheepfold ?? defaultPenSpot(),
-            this.city ?? defaultCitySpot()
-        ];
-        const away = findPointAwayFromAll(placed, STRAY_TELEPORT_MIN, STRAY_TELEPORT_GAP);
         this.lagWarned.delete(farthest);
-        farthest.becomeLost(away.x, away.y);
+        farthest.becomeLost();
         playStrayBaah(this, farthest, this.shepherd.sprite);
         cueWaitingBleat(farthest, this.time.now);
     }

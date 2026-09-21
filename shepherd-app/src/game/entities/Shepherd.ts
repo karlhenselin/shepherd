@@ -2,6 +2,7 @@ import { Scene, GameObjects, Physics, Input, Math as PMath } from 'phaser';
 import { characterDepth } from '../world/constants';
 import { KeepOutZone, pushOutsideKeepOuts } from './flockBehavior';
 import { walkAnimKey } from './shepherdArt';
+import { speedScale } from '../save/cheatSpeed';
 
 const SPEED = 180;
 const ARRIVE_DISTANCE = 8;
@@ -329,7 +330,7 @@ export class Shepherd {
             const stick = Math.hypot(this.stickX, this.stickY);
 
             if (stick > 0.12) {
-                const speed = SPEED * Math.min(1, stick);
+                const speed = this.moveSpeed() * Math.min(1, stick);
                 this.target = null;
                 this.body.setVelocity(this.stickX, this.stickY);
                 this.body.velocity.normalize().scale(speed);
@@ -348,9 +349,10 @@ export class Shepherd {
             const vy = up + down;
 
             if (vx !== 0 || vy !== 0) {
+                const speed = this.moveSpeed();
                 this.target = null;
-                this.body.setVelocity(vx * SPEED, vy * SPEED);
-                this.body.velocity.normalize().scale(SPEED);
+                this.body.setVelocity(vx * speed, vy * speed);
+                this.body.velocity.normalize().scale(speed);
                 this.faceVelocity();
                 this.applyKeepOutPush();
                 this.tickWalkAnim(delta);
@@ -376,7 +378,7 @@ export class Shepherd {
             }
 
             this.body.setVelocity(dx, dy);
-            this.body.velocity.normalize().scale(this.guided ? this.guidedSpeed : SPEED);
+            this.body.velocity.normalize().scale(this.guided ? this.guidedSpeed : this.moveSpeed());
             this.faceVelocity();
             this.applyKeepOutPush();
             this.tickWalkAnim(delta);
@@ -451,6 +453,10 @@ export class Shepherd {
         if (Math.abs(vx) > 8) {
             this.sprite.setFlipX(vx < 0);
         }
+    }
+
+    private moveSpeed (): number {
+        return SPEED * speedScale();
     }
 
     private tickWalkAnim (deltaMs: number): void {

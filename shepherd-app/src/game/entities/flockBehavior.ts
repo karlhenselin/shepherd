@@ -2,6 +2,7 @@ import { Scene, GameObjects, Physics } from 'phaser';
 import { Shepherd } from './Shepherd';
 import { GrassPatch, GRASS_APPROACH_RANGE, GRASS_EAT_ARRIVE } from '../world/GrassPatch';
 import { characterDepth } from '../world/constants';
+import { speedScale } from '../save/cheatSpeed';
 
 export const FOLLOW_SPEED = 150 * 0.95 * 0.95;
 /** After 1 Corinthians 15:51, the sheep keep up a little better. */
@@ -293,25 +294,17 @@ export class FlockBehavior {
         this.body.setVelocity(0, 0);
     }
 
-    becomeLost (x: number, y: number): void {
+    /** Stop following and sit where they are until the shepherd comes back. */
+    becomeLost (): void {
         this.clearHappyDance();
         this.rescueWait = null;
         this.drinkSpot = null;
         this.mood = 'waiting';
         this.penTarget = null;
         this.penPath = [];
-        this.sprite.setPosition(x, y);
-        this.sprite.setAngle(0);
         this.body.setVelocity(0, 0);
         this.body.setImmovable(true);
-
-        if (this.peaceable && this.appearance.restTextureKey) {
-            this.applyRestPose();
-        }
-        else {
-            this.applyStandPose();
-        }
-
+        this.sprite.setAngle(10);
         this.placeShadow();
     }
 
@@ -594,10 +587,16 @@ export class FlockBehavior {
 
         if (this.mood === 'waiting') {
             this.body.setVelocity(0, 0);
-            this.sprite.setAngle(0);
 
             if (this.peaceable && this.appearance.restTextureKey) {
                 this.applyRestPose();
+            }
+            else if (this.discovered) {
+                // Wandered off — sit until the shepherd walks back.
+                this.sprite.setAngle(10);
+            }
+            else {
+                this.sprite.setAngle(0);
             }
 
             this.placeShadow();
@@ -864,7 +863,7 @@ export class FlockBehavior {
 
     private trailSpeed (): number {
         const boost = this.changed && !this.peaceable ? CHANGED_FOLLOW_SCALE : 1;
-        return FOLLOW_SPEED * this.followSpeedScale() * boost;
+        return FOLLOW_SPEED * this.followSpeedScale() * boost * speedScale();
     }
 
     private waddleAngle (now: number): number {

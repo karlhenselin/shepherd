@@ -6,7 +6,9 @@ import {
     canSpawnFlockName,
     expectedNextFlockName,
     FLOCK_NAMES,
+    hasMissingSheep,
     planRestoreFind,
+    preferHintSheep,
     shouldAwaitHoleSheep,
     shouldHaveLostSheep,
     shouldTrapInHole,
@@ -53,6 +55,45 @@ describe('flock spawn order', () => {
         expect(shouldTrapInHole('Biscuit', false)).toBe(true);
         expect(shouldTrapInHole('Biscuit', true)).toBe(false);
         expect(shouldTrapInHole('Milo', false)).toBe(false);
+    });
+});
+
+describe('missing sheep gates', () => {
+    it('treats wanderers (discovered + waiting) as missing', () => {
+        expect(hasMissingSheep([
+            { mood: 'following', hurt: false, discovered: true },
+            { mood: 'waiting', hurt: false, discovered: true }
+        ])).toBe(true);
+    });
+
+    it('treats undiscovered story finds as missing', () => {
+        expect(hasMissingSheep([
+            { mood: 'following', hurt: false, discovered: true },
+            { mood: 'waiting', hurt: false, discovered: false }
+        ])).toBe(true);
+
+        expect(hasMissingSheep([
+            { mood: 'following', hurt: false, discovered: true },
+            { mood: 'hurt', hurt: true, discovered: false }
+        ])).toBe(true);
+    });
+
+    it('allows the next quest when the flock is following', () => {
+        expect(hasMissingSheep([
+            { mood: 'following', hurt: false, discovered: true },
+            { mood: 'following', hurt: false, discovered: true }
+        ])).toBe(false);
+    });
+
+    it('prefers wanderer hints over the next story find', () => {
+        expect(preferHintSheep([
+            { name: 'Snowball', mood: 'waiting', hurt: false, discovered: true },
+            { name: 'Biscuit', mood: 'hurt', hurt: true, discovered: false }
+        ])).toBe('wandered');
+
+        expect(preferHintSheep([
+            { name: 'Milo', mood: 'waiting', hurt: false, discovered: false }
+        ])).toBe('seek');
     });
 });
 
@@ -196,7 +237,7 @@ describe('planRestoreFind', () => {
         expect(plan.spawnFromQueue).toBe(true);
     });
 
-    it('marks hurt-hole Biscuit discovered when waitingName is set', () => {
+    it('keeps hurt-hole Biscuit undiscovered until the shepherd finds him', () => {
         const plan = planRestoreFind(baseSave({
             checkpoint: 'hurt-sheep',
             foundCount: 3,
@@ -210,7 +251,7 @@ describe('planRestoreFind', () => {
 
         expect(plan.waitingName).toBe('Biscuit');
         expect(plan.trapWaitingInHole).toBe(true);
-        expect(plan.markWaitingDiscovered).toBe(true);
+        expect(plan.markWaitingDiscovered).toBe(false);
         expect(plan.spawnFromQueue).toBe(false);
         expect(plan.showMissingCue).toBe(false);
     });

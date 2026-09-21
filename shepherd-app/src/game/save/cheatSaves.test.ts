@@ -148,7 +148,7 @@ describe('cheat → restore find plans', () => {
             expect: {
                 waitingName: 'Biscuit',
                 trapWaitingInHole: true,
-                markWaitingDiscovered: true,
+                markWaitingDiscovered: false,
                 spawnFromQueue: false,
                 showMissingCue: false
             }
@@ -209,6 +209,13 @@ describe('cheat scripture unlock flags', () => {
     it('unlocks Isaiah 11:6 after finding Leo or Sarah', () => {
         const lion = unlockedStoryPassages(spot('Find the wolf'));
         expect(lion.some((passage) => passage.ref === 'Isaiah 11:6')).toBe(true);
+    });
+
+    it('marks the blue arrow tip heard once pastures are done', () => {
+        expect(spot('Psalm 23:2 / Isaiah 53:6').heardGemArrowTip).toBe(true);
+        expect(spot('Found Milo — stay together').heardGemArrowTip).toBe(true);
+        expect(spot('Enter the city').heardGemArrowTip).toBe(true);
+        expect(spot('Found first sheep').heardGemArrowTip).toBeUndefined();
     });
 
     it('collectible cheats fill gem / water / tree ids', () => {

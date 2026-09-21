@@ -76,6 +76,42 @@ export function shouldAwaitHoleSheep (save: Pick<GameSave, 'heardPsalm2b' | 'hea
         && !save.waitingName;
 }
 
+/**
+ * True while any flock member is still out as a find or has wandered off.
+ * Next story sheep must not spawn until this clears.
+ */
+export function hasMissingSheep (flock: ReadonlyArray<{
+    mood: string;
+    hurt: boolean;
+    discovered: boolean;
+}>): boolean {
+    return flock.some((sheep) =>
+        sheep.mood === 'waiting' || (sheep.hurt && !sheep.discovered)
+    );
+}
+
+/**
+ * White-arrow priority among sheep: wanderers (already found) before new story finds.
+ */
+export function preferHintSheep (flock: ReadonlyArray<{
+    mood: string;
+    hurt: boolean;
+    discovered: boolean;
+    name: string;
+}>): 'wandered' | 'seek' | null {
+    if (flock.some((sheep) => sheep.mood === 'waiting' && sheep.discovered)) {
+        return 'wandered';
+    }
+
+    if (flock.some((sheep) =>
+        (sheep.mood === 'waiting' || (sheep.hurt && !sheep.discovered)) && !sheep.discovered
+    )) {
+        return 'seek';
+    }
+
+    return null;
+}
+
 export function treasureHudUnlocked (foundCount: number): boolean {
     return foundCount >= 1;
 }
@@ -89,7 +125,7 @@ export type RestoreFindPlan = {
     /** Sheep left on the map to find (waiting or hole), if any. */
     waitingName: string | null;
     trapWaitingInHole: boolean;
-    /** Hurt-in-hole cheat: bandage without re-walking up. */
+    /** Hurt-in-hole sheep stay undiscovered until the shepherd walks up (keeps the injury a surprise). */
     markWaitingDiscovered: boolean;
     /** Taken from nextNames via spawnNextSheep (not waitingName). */
     spawnFromQueue: boolean;
@@ -120,7 +156,7 @@ export function planRestoreFind (save: GameSave): RestoreFindPlan {
     if (save.waitingName) {
         waitingName = save.waitingName;
         trapWaitingInHole = shouldTrapInHole(save.waitingName, save.heardPsalm3);
-        markWaitingDiscovered = save.foundCount >= 3 && trapWaitingInHole;
+        markWaitingDiscovered = false;
     }
     else if (shouldHaveLostSheep(save)) {
         waitingName = save.nextNames[0] ?? null;

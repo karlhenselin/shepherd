@@ -184,9 +184,8 @@ export function playLaggingBaah (scene: Scene, sheep: FlockBehavior, listener: {
 }
 
 /**
- * Loud scared baah at the moment a sheep wanders/teleports away.
- * Stereo-panned toward the teleport destination; volume fades out during the clip
- * so it sounds like the sheep is going farther away.
+ * Loud baah when a follower gives up and sits down behind the flock.
+ * Stereo-panned toward the sheep.
  */
 export function playStrayBaah (scene: Scene, sheep: FlockBehavior, listener: { x: number; y: number }): boolean {
     if (!canPlayBleats(scene)) {

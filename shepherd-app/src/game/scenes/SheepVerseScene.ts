@@ -4,13 +4,15 @@ import { isSoundOn } from '../audio/soundPref';
 import { startWorldMusic } from '../audio/worldMusic';
 import { createSheepVersePlayfield, type SheepVersePlayfield } from '../minigame/sheepVersePlayfield';
 import { chromePad } from '../ui/chromeInsets';
+import { EAR_ICON_KEY, EAR_ICON_SIZE, ensureEarIcon } from '../ui/earIcon';
 import { UMBER } from '../ui/paperScroll';
 import { scriptureLine } from '../data/scripture';
 import { speakCue, stopSpeech } from '../ui/speech';
-import { markSheepMinigameTried } from '../save/gameSave';
+import { loadSave, markSheepMinigameTried, markSheepVerseDirectionsHeard } from '../save/gameSave';
 
 const PAPER = 0xf3ead8;
 const MUTED = '#6b5344';
+const DIRECTIONS = 'Tap the sheep in order. Click the ear to hear the passage again.';
 
 export type SheepVerseSceneData = {
     passage?: MinigamePassage;
@@ -27,9 +29,12 @@ export class SheepVerseScene extends Scene {
     private refText: Phaser.GameObjects.Text | null = null;
     private verseText: Phaser.GameObjects.Text | null = null;
     private statusText: Phaser.GameObjects.Text | null = null;
+    private earButton: Phaser.GameObjects.Image | null = null;
     private closing = false;
     private verseDone = false;
     private speakGen = 0;
+    /** Speak how-to once, then the verse. */
+    private needDirections = false;
 
     constructor () {
         super('SheepVerseScene');
@@ -41,6 +46,7 @@ export class SheepVerseScene extends Scene {
         this.queue = null;
         this.queueIndex = 0;
         this.speakGen = 0;
+        this.needDirections = loadSave()?.heardSheepVerseDirections !== true;
 
         this.sound.mute = !isSoundOn();
         markSheepMinigameTried();
@@ -84,11 +90,12 @@ export class SheepVerseScene extends Scene {
             wordWrap: { width: width * 0.78 }
         }).setOrigin(0.5, 0).setDepth(5);
 
-        this.statusText = this.add.text(width / 2, pad.top + 108, 'Tap the sheep in order', {
+        this.statusText = this.add.text(width / 2, pad.top + 108, DIRECTIONS, {
             fontFamily: 'Georgia, Palatino, serif',
             fontSize: '16px',
             color: MUTED,
-            align: 'center'
+            align: 'center',
+            wordWrap: { width: width * 0.78 }
         }).setOrigin(0.5).setDepth(5);
 
         const close = this.add.text(width - pad.right, pad.top + 4, '×', {
@@ -110,6 +117,25 @@ export class SheepVerseScene extends Scene {
         ) => {
             event.stopPropagation();
             this.close();
+        });
+
+        ensureEarIcon(this);
+        this.earButton = this.add.image(0, 0, EAR_ICON_KEY)
+            .setDisplaySize(EAR_ICON_SIZE, EAR_ICON_SIZE)
+            .setOrigin(0, 0.5)
+            .setDepth(40)
+            .setInteractive({ useHandCursor: true });
+
+        this.earButton.on('pointerover', () => this.earButton?.setTint(0xc4a882));
+        this.earButton.on('pointerout', () => this.earButton?.clearTint());
+        this.earButton.on('pointerdown', (
+            _p: unknown,
+            _x: number,
+            _y: number,
+            event: Phaser.Types.Input.EventData
+        ) => {
+            event.stopPropagation();
+            this.replayPassage();
         });
 
         this.startVerse(this.currentPassage);
@@ -141,7 +167,8 @@ export class SheepVerseScene extends Scene {
         this.currentPassage = passage;
         this.refText?.setText(passage.ref);
         this.verseText?.setText('');
-        this.statusText?.setText('Tap the sheep in order');
+        this.statusText?.setText(DIRECTIONS);
+        this.layoutEar();
         this.layoutStatus();
 
         const pad = chromePad();
@@ -168,8 +195,40 @@ export class SheepVerseScene extends Scene {
             () => undefined
         );
 
+        this.speakIntro();
+    }
+
+    /** First visit: directions, then the verse. Later visits: verse only. */
+    private speakIntro (): void {
+        if (!this.needDirections) {
+            this.speakPassage();
+            return;
+        }
+
+        this.needDirections = false;
+        markSheepVerseDirectionsHeard();
         const gen = ++this.speakGen;
-        speakCue(scriptureLine(passage), () => {
+        speakCue(DIRECTIONS, () => {
+            if (this.closing || gen !== this.speakGen || this.verseDone) {
+                return;
+            }
+
+            this.speakPassage();
+        });
+    }
+
+    /** Replay the current verse aloud (ear button). */
+    private replayPassage (): void {
+        if (this.closing || this.verseDone) {
+            return;
+        }
+
+        this.speakPassage();
+    }
+
+    private speakPassage (): void {
+        const gen = ++this.speakGen;
+        speakCue(scriptureLine(this.currentPassage), () => {
             if (this.closing || gen !== this.speakGen || this.verseDone) {
                 return;
             }
@@ -186,6 +245,17 @@ export class SheepVerseScene extends Scene {
         const prev = this.verseText.text.trim();
         this.verseText.setText(prev.length > 0 ? `${prev} ${display}` : display);
         this.layoutStatus();
+    }
+
+    private layoutEar (): void {
+        if (!this.earButton || !this.refText) {
+            return;
+        }
+
+        this.earButton.setPosition(
+            this.refText.x + this.refText.displayWidth / 2 + 12,
+            this.refText.y
+        );
     }
 
     private layoutStatus (): void {
